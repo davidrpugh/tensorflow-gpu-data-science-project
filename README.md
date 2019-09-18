@@ -1,6 +1,6 @@
-# python-gpu-data-science-project
+# tensorflow-gpu-data-science-project
 
-Repository containing scaffolding for a Python 3-based data science project with GPU acceleration. 
+Repository containing scaffolding for a Python 3-based data science project with GPU acceleration based on the [TensorFlow](https://www.tensorflow.org/) ecosystem. 
 
 ## Creating a new project from this template
 
