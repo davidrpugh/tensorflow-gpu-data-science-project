@@ -4,6 +4,11 @@ channels:
   - defaults
 
 dependencies:
+  - cudatoolkit=10.1
+  - cudnn=7.6
+  - cupti=10.1
   - jupyterlab=1.0
   - python=3.6
-  - tensorflow-gpu=1.14  
+  - pip=19.2
+  - pip:
+    - tensorflow-gpu==2.0.0  
