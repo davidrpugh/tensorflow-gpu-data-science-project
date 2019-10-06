@@ -1,0 +1,2 @@
+jupyter labextension install --no-build jupyterlab_tensorboard@0.1.6
+jupyter lab build

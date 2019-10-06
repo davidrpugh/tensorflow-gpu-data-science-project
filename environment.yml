@@ -1,9 +1,14 @@
 name: null
 
 channels:
+  - conda-forge
   - defaults
 
 dependencies:
   - jupyterlab=1.0
+  - nodejs=12.8
   - python=3.6
-  - tensorflow-gpu=1.14  
+  - tensorflow-gpu=1.14
+  - pip=19.2
+  - pip:
+    - jupyter-tensorboard==0.1  
