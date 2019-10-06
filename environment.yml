@@ -4,9 +4,9 @@ channels:
   - defaults
 
 dependencies:
-  - cudatoolkit=10.1
+  - cudatoolkit=10.0
   - cudnn=7.6
-  - cupti=10.1
+  - cupti=10.0
   - jupyterlab=1.0
   - python=3.6
   - pip=19.2
