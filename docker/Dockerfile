@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.1-cudnn7-runtime-ubuntu16.04
+FROM nvidia/cuda:10.0-cudnn7-runtime-ubuntu16.04
 
 LABEL maintainer="pughdr <david.pugh@kaust.edu.sa>"
 
@@ -26,8 +26,8 @@ RUN adduser --disabled-password \
     $USER
 
 # Dockerhub not yet supporting COPY --chown $UID:$GID syntax
-COPY environment.yml /usr/tmp/environment.yml
-RUN chown $UID:$GID /usr/tmp/environment.yml
+COPY environment.yml /tmp/environment.yml
+RUN chown $UID:$GID /tmp/environment.yml
 
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chown $UID:$GID /usr/local/bin/docker-entrypoint.sh && \
@@ -47,7 +47,7 @@ RUN mkdir $HOME/app
 WORKDIR $HOME/app
 
 RUN ~/miniconda3/bin/conda update --name base --channel defaults conda && \
-    ~/miniconda3/bin/conda env create --prefix ./env --file /usr/tmp/environment.yml && \
+    ~/miniconda3/bin/conda env create --prefix ./env --file /tmp/environment.yml && \
     ~/miniconda3/bin/conda clean --all --yes
 
 # use an entrypoint script to insure conda environment is properly activated at runtime
