@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.0-cudnn7-runtime-ubuntu16.04
+FROM nvidia/cuda:10.0-base-ubuntu16.04
 
 LABEL maintainer="pughdr <david.pugh@kaust.edu.sa>"
 
