@@ -5,15 +5,15 @@ channels:
   - defaults
 
 dependencies:
-  - cudatoolkit=10.0
+  - cudatoolkit-dev=10.1
   - cudnn=7.6
-  - cupti=10.0
+  - cupti=10.1
   - gxx_linux-64=7.3
   - jupyterlab=1.1
   - nccl=2.4
   - openmpi=4.0
-  - pip=19.3
-  - pip:
-    - horovod==0.18
+#  - pip=19.3
+#  - pip:
+#    - horovod==0.18
   - python=3.7
   - tensorflow-gpu=2.0  
