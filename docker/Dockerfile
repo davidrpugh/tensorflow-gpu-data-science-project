@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.0-base-ubuntu16.04
+FROM nvidia/cuda:10.0-devel-ubuntu16.04
 
 LABEL maintainer="pughdr <david.pugh@kaust.edu.sa>"
 
@@ -53,8 +53,14 @@ WORKDIR $HOME/app
 RUN ~/miniconda3/bin/conda update --name base --channel defaults conda && \
     ~/miniconda3/bin/conda env create --prefix ./env --file /tmp/environment.yml && \
     ~/miniconda3/bin/conda clean --all --yes
+
+ENV CUDA_HOME /usr/local/cuda-10.0/
+ENV HOROVOD_CUDA_HOME ${CUDA_HOME}
+ENV HOROVOD_NCCL_HOME ./env
+ENV HOROVOD_GPU_ALLREDUCE NCCL
 RUN source ~/miniconda3/bin/activate ./env && \
     /usr/local/postBuild.sh && \
+    pip install horovod==0.18.* --no-cache-dir && \
     source ~/miniconda3/bin/deactivate
 
 # use an entrypoint script to insure conda environment is properly activated at runtime
