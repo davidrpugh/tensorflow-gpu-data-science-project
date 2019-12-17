@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.0-devel-ubuntu16.04
+FROM nvidia/cuda:10.1-devel-ubuntu16.04
 
 LABEL maintainer="pughdr <david.pugh@kaust.edu.sa>"
 
@@ -13,9 +13,9 @@ RUN apt-get update --fix-missing && \
 ARG username=al-khawarizmi
 ARG uid=1000
 ARG gid=100
-ENV USER ${username}
-ENV UID ${uid}
-ENV GID ${gid}
+ENV USER $username
+ENV UID $uid
+ENV GID $gid
 ENV HOME /home/$USER
 
 RUN adduser --disabled-password \
@@ -25,46 +25,30 @@ RUN adduser --disabled-password \
     --home $HOME \
     $USER
 
-# Dockerhub not yet supporting COPY --chown $UID:$GID syntax
-COPY environment.yml /tmp/environment.yml
-RUN chown $UID:$GID /tmp/environment.yml
-
-COPY postBuild /usr/local/postBuild.sh
-RUN chown $UID:$GID /usr/local/postBuild.sh && \
-    chmod +x /usr/local/postBuild.sh
-
-COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chown $UID:$GID /usr/local/bin/docker-entrypoint.sh && \
-    chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# install Miniconda as non-root user
 USER $USER
-
-ENV MINICONDA_VERSION 4.7.12
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh -O ~/miniconda.sh && \
-    chmod +x ~/miniconda.sh && \
-    ~/miniconda.sh -b && \
-    rm ~/miniconda.sh && \
-    echo ". ${HOME}/miniconda3/etc/profile.d/conda.sh" >> ~/.profile
 
 RUN mkdir $HOME/app
 WORKDIR $HOME/app
 
-RUN ~/miniconda3/bin/conda update --name base --channel defaults conda && \
-    ~/miniconda3/bin/conda env create --prefix ./env --file /tmp/environment.yml && \
-    ~/miniconda3/bin/conda clean --all --yes
+COPY --chown=$UID:$GID environment.yml requirements.txt postBuild ./
+COPY --chown=$UID:$GID ./bin/create-conda-environment.sh ./bin/
+COPY --chown=$UID:$GID ./docker/entrypoint.sh ./docker/
+RUN chmod u+x ./postBuild ./bin/create-conda-environment.sh ./docker/entrypoint.sh
 
-ENV CUDA_HOME /usr/local/cuda-10.0/
-ENV HOROVOD_CUDA_HOME ${CUDA_HOME}
-ENV HOROVOD_NCCL_HOME ./env
-ENV HOROVOD_GPU_ALLREDUCE NCCL
-RUN source ~/miniconda3/bin/activate ./env && \
-    /usr/local/postBuild.sh && \
-    pip install horovod==0.18.* --no-cache-dir && \
-    source ~/miniconda3/bin/deactivate
+ENV MINICONDA_VERSION 4.7.12
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-$MINICONDA_VERSION-Linux-x86_64.sh -O ~/miniconda.sh && \
+    chmod +x ~/miniconda.sh && \
+    ~/miniconda.sh -b && \
+    rm ~/miniconda.sh && \
+    echo ". $HOME/miniconda3/etc/profile.d/conda.sh" >> ~/.profile
+
+RUN ~/miniconda3/bin/conda update --name base --channel defaults conda && \
+    ~/miniconda3/bin/conda init bash
+RUN ./bin/create-conda-environment.sh
+RUN ~/miniconda3/bin/conda clean --all --yes
 
 # use an entrypoint script to insure conda environment is properly activated at runtime
-ENTRYPOINT [ "/usr/local/bin/docker-entrypoint.sh" ]
+ENTRYPOINT [ "./docker/entrypoint.sh" ]
 
 # default command will be to launch JupyterLab server for development
 CMD [ "jupyter", "lab", "--no-browser", "--ip", "0.0.0.0" ]
