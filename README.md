@@ -21,17 +21,23 @@ Project organization is based on ideas from [_Good Enough Practices for Scientif
 9. Put project source code in the `src` directory.
 10. Name all files to reflect their content or function.
 
-## Creating the Conda environment
+## Building the Conda environment
 
 After adding any necessary dependencies that should be downloaded via `conda` to the `environment.yml` file 
 and any dependencies that should be downloaded via `pip` to the `requirements.txt` file you create the 
-Conda environment in a sub-directory `./env`of your project directory by running the following command.
+Conda environment in a sub-directory `./env`of your project directory by running the following commands.
 
 ```bash
-$ . bin/create-conda-environment.sh
+$ export ENV_PREFIX=$PWD/env
+$ export HOROVOD_CUDA_HOME=$ENV_PREFIX
+$ export HOROVOD_NCCL_HOME=$ENV_PREFIX
+$ export HOROVOD_GPU_ALLREDUCE=NCCL 
+$ conda env create --prefix $ENV_PREFIX --file environment.yml --force
+$ conda activate $ENV_PREFIX
+(/path/to/env)$ ./postBuild # re-builds jupyterlab with to use installed extensions
 ```
 
-This script will perform the following operations.
+These commands perform the following operations.
 
 1. Create a Conda environment in `./env` containing all the necessary Cuda libraries 
    `cudatoolkit-dev`, `cudnn`, `cupti`, 'nccl`, as well as `openmpi`, TensorFlow, and JupyterLab
