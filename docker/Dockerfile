@@ -2,7 +2,7 @@ FROM nvidia/cuda:10.1-devel-ubuntu16.04
 
 LABEL maintainer="pughdr <david.pugh@kaust.edu.sa>"
 
-SHELL [ "/bin/bash", "-c" ]
+SHELL [ "/bin/bash", "--login", "-c" ]
 
 RUN apt-get update --fix-missing && \
     apt-get install -y wget bzip2 curl git && \
@@ -63,7 +63,7 @@ ENV HOROVOD_NCCL_HOME $ENV_PREFIX
 ENV HOROVOD_GPU_ALLREDUCE NCCL
 RUN conda update --name base --channel defaults conda && \
     conda env create --prefix $ENV_PREFIX --file /tmp/environment.yml --force && \
-    source activate $ENV_PREFIX && \
+    conda activate $ENV_PREFIX && \
     /usr/local/bin/postBuild && \
     conda clean --all --yes
 
