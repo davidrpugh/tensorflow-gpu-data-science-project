@@ -5,7 +5,7 @@ LABEL maintainer="pughdr <david.pugh@kaust.edu.sa>"
 SHELL [ "/bin/bash", "-c" ]
 
 RUN apt-get update --fix-missing && \
-    apt-get install -y wget bzip2 curl git gcc && \
+    apt-get install -y wget bzip2 curl git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -25,30 +25,50 @@ RUN adduser --disabled-password \
     --home $HOME \
     $USER
 
+COPY environment.yml requirements.txt /tmp/
+RUN chown $UID:$GID /tmp/environment.yml /tmp/requirements.txt
+
+COPY postBuild docker/entrypoint.sh /usr/local/bin/
+RUN chown $UID:$GID /usr/local/bin/postBuild /usr/local/bin/entrypoint.sh && \
+    chmod u+x /usr/local/bin/postBuild /usr/local/bin/entrypoint.sh
+
 USER $USER
 
-RUN mkdir $HOME/app
-WORKDIR $HOME/app
-
-COPY --chown=$UID:$GID environment.yml requirements.txt postBuild ./
-COPY --chown=$UID:$GID ./bin/create-conda-environment.sh ./bin/
-COPY --chown=$UID:$GID ./docker/entrypoint.sh ./docker/
-RUN chmod u+x ./postBuild ./bin/create-conda-environment.sh ./docker/entrypoint.sh
-
+# install miniconda
 ENV MINICONDA_VERSION 4.7.12
+ENV CONDA_DIR $HOME/miniconda3
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-$MINICONDA_VERSION-Linux-x86_64.sh -O ~/miniconda.sh && \
     chmod +x ~/miniconda.sh && \
-    ~/miniconda.sh -b && \
-    rm ~/miniconda.sh && \
-    echo ". $HOME/miniconda3/etc/profile.d/conda.sh" >> ~/.profile
+    ~/miniconda.sh -b -p $CONDA_DIR && \
+    rm ~/miniconda.sh
 
-RUN ~/miniconda3/bin/conda update --name base --channel defaults conda && \
-    ~/miniconda3/bin/conda init bash
-RUN ./bin/create-conda-environment.sh
-RUN ~/miniconda3/bin/conda clean --all --yes
+# make non-activate conda commands available
+ENV PATH=$CONDA_DIR/bin:$PATH
+
+# make conda activate command available from /bin/bash --login shells
+RUN echo ". $CONDA_DIR/etc/profile.d/conda.sh" >> ~/.profile
+
+# make conda activate command available from /bin/bash --interative shells
+RUN conda init bash
+
+# create a project directory inside user home
+ENV PROJECT_DIR $HOME/app
+RUN mkdir $PROJECT_DIR
+WORKDIR $PROJECT_DIR
+
+# build the conda environment
+ENV ENV_PREFIX $PROJECT_DIR/env
+ENV HOROVOD_CUDA_HOME $ENV_PREFIX
+ENV HOROVOD_NCCL_HOME $ENV_PREFIX
+ENV HOROVOD_GPU_ALLREDUCE NCCL
+RUN conda update --name base --channel defaults conda && \
+    conda env create --prefix $ENV_PREFIX --file /tmp/environment.yml --force && \
+    source activate $ENV_PREFIX && \
+    /usr/local/bin/postBuild && \
+    conda clean --all --yes
 
 # use an entrypoint script to insure conda environment is properly activated at runtime
-ENTRYPOINT [ "./docker/entrypoint.sh" ]
+ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
 
 # default command will be to launch JupyterLab server for development
 CMD [ "jupyter", "lab", "--no-browser", "--ip", "0.0.0.0" ]
