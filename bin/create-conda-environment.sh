@@ -1,7 +1,3 @@
-#!/bin/bash --login
-
-set -e
-
 # make sure that CUDA and NCCL are available
 export ENV_PREFIX=$PWD/env
 export HOROVOD_CUDA_HOME=$ENV_PREFIX
