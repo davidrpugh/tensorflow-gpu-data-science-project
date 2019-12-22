@@ -47,6 +47,16 @@ $ . bin/create-conda-environment.sh
 Note that the `./env` directory is *not* under version control as it can always be re-created from 
 the `./bin/create-conda-environment.sh` file as necessary.
 
+## Verifying the Conda environment
+
+After building the Conda environment you can check that Horovod has been built with support for 
+TensorFlow, MPI, and NCCL with the following command.
+
+```
+$ conda activate $ENV_PREFIX # optional if environment already active
+(/path/to/env) $ horovodrun --check-build
+```
+
 ## Updating the Conda environment
 
 If you add (remove) dependencies to (from) either the `environment.yml` file or the `requirements.txt` file 
