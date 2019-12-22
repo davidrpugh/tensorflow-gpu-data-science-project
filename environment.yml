@@ -5,11 +5,11 @@ channels:
   - defaults
 
 dependencies:
-  - cmake=3.16
+#  - cmake=3.16
   - cudatoolkit-dev=10.1
   - cudnn=7.6
   - cupti=10.1
-  - gcc_linux-64=7.3
+#  - gcc_linux-64=7.3
   - gxx_linux-64=7.3
   - jupyterlab=1.2
   - nccl=2.4
