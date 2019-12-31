@@ -16,4 +16,5 @@ dependencies:
   - pip=19.3
   - pip:
     - tf-nightly-gpu # needs to be installed prior to building horovod
+    - -r file:requirements.txt
   - python=3.6
