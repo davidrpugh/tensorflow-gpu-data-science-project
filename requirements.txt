@@ -1,0 +1,4 @@
+horovod==0.18.*
+jupyterlab-nvdashboard==0.1.*
+jupyter-tensorboard==0.1.*
+--no-binary=horovod

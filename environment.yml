@@ -5,10 +5,16 @@ channels:
   - defaults
 
 dependencies:
-  - jupyterlab=1.0
-  - nodejs=12.8
-  - python=3.6
-  - tensorflow-gpu=1.14
-  - pip=19.2
+  - cudatoolkit-dev=10.1
+  - cudnn=7.6
+  - cupti=10.1
+  - gxx_linux-64=7.3
+  - jupyterlab=1.2
+  - nccl=2.4
+  - nodejs=12.13
+  - openmpi=4.0
+  - pip=19.3
   - pip:
-    - jupyter-tensorboard==0.1  
+    - tf-nightly-gpu # needs to be installed prior to building horovod
+    - -r file:requirements.txt
+  - python=3.6
