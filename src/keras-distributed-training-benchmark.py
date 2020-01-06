@@ -9,7 +9,7 @@ import horovod.tensorflow.keras as hvd
 
 parser = argparse.ArgumentParser(description="TensorFlow + Horovod distributed training benchmark")
 parser.add_argument("--data-dir", type=str, help="path to ILSVR data")
-parser.add_argument("--results-dir", type=str, help="Path to the results directory")
+parser.add_argument("--logging-dir", type=str, help="Path to the logging directory")
 
 # Default settings from https://arxiv.org/abs/1706.02677.
 parser.add_argument("--batch-size", type=int, default=32, help="input batch size for training")
@@ -40,8 +40,7 @@ TESTING_DATA_DIR = data_dir / "test"
 
 # define the logging directories
 VERBOSE = 2 if hvd.rank() == 0 else 0
-RESULTS_DIR = pathlib.Path(args.results_dir)
-LOGGING_DIR = RESULTS_DIR / "logs"
+LOGGING_DIR = pathlib.Path(args.logging_dir)
 
 # create the training and validation datasets
 IMG_WIDTH, IMG_HEIGHT = 224, 224
