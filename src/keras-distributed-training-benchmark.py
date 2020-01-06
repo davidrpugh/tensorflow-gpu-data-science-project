@@ -1,6 +1,5 @@
 import argparse
 import pathlib
-import pickle
 
 import numpy as np
 import tensorflow as tf
@@ -23,10 +22,10 @@ parser.add_argument("--weight-decay", type=float, default=5e-5, help="weight dec
 parser.add_argument("--seed", type=int, default=42, help="random seed")
 args = parser.parse_args()
 
-# Horovod: initialize Horovod.
+# initialize Horovod.
 hvd.init()
 
-# Horovod: pin GPU to be used to process local rank (one GPU per process)
+# pin GPU to be used to process local rank (one GPU per process)
 gpus = tf.config.experimental.list_physical_devices("GPU")
 for gpu in gpus:
     tf.config.experimental.set_memory_growth(gpu, True)
@@ -43,8 +42,6 @@ TESTING_DATA_DIR = data_dir / "test"
 VERBOSE = 2 if hvd.rank() == 0 else 0
 RESULTS_DIR = pathlib.Path(args.results_dir)
 LOGGING_DIR = RESULTS_DIR / "logs"
-CHECKPOINTS_LOGGING_DIR = LOGGING_DIR / "checkpoints"
-TENSORBOARD_LOGGING_DIR = LOGGING_DIR / "tensorboard"
 
 # create the training and validation datasets
 IMG_WIDTH, IMG_HEIGHT = 224, 224
@@ -93,10 +90,9 @@ AUTOTUNE = (tf.data
 training_dataset = (tf.data
                       .Dataset
                       .list_files(f"{TRAINING_DATA_DIR}/*/*", shuffle=True, seed=args.seed)
-                      .take(N_TRAINING_IMAGES // 100)
                       .map(preprocess, num_parallel_calls=AUTOTUNE)
                       .cache()
-                      .shuffle(N_TRAINING_IMAGES // 100, reshuffle_each_iteration=True, seed=args.seed)
+                      .shuffle(N_TRAINING_IMAGES, reshuffle_each_iteration=True, seed=args.seed)
                       .repeat()
                       .batch(args.batch_size)
                       .prefetch(buffer_size=1))
@@ -104,7 +100,6 @@ training_dataset = (tf.data
 validation_dataset = (tf.data
                        .Dataset
                        .list_files(f"{VALIDATION_DATA_DIR}/*/*", shuffle=False)
-                       .take(N_VALIDATION_IMAGES // 100)
                        .map(preprocess, num_parallel_calls=AUTOTUNE)
                        .cache()
                        .batch(args.val_batch_size))
@@ -117,12 +112,16 @@ _loss_fn = (keras.losses
 _initial_lr = args.base_lr * hvd.size() # adjust initial learning rate based on number of GPUs.
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
-_metrics = ["accuracy", "top_k_categorical_accuracy"]
+_metrics = [
+    "accuracy",
+    "top_k_categorical_accuracy"
+]
+
 model_fn.compile(loss=_loss_fn,
                  optimizer=_optimizer,
                  metrics=_metrics)      
 
-
+# define the callbacks
 _callbacks = [
     # Horovod: broadcast initial variable states from rank 0 to all other processes.
     # This is necessary to ensure consistent initialization of all workers when
@@ -134,8 +133,6 @@ _callbacks = [
     # Note: This callback must be in the list before the ReduceLROnPlateau,
     # TensorBoard, or other metrics-based callbacks.
     hvd.callbacks.MetricAverageCallback(),
-
-    keras.callbacks.TensorBoard(TENSORBOARD_LOGGING_DIR),
     
     # using `lr = 1.0 * hvd.size()` from the very beginning leads to worse final
     # accuracy. Scale the learning rate `lr = 1.0` ---> `lr = 1.0 * hvd.size()` during
@@ -149,21 +146,22 @@ _callbacks = [
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=80, multiplier=1e-3),
 ]
 
-# Horovod: save checkpoints only on the first worker to prevent other workers from corrupting them.
-_model_checkpoint = (keras.callbacks
-                          .ModelCheckpoint(CHECKPOINTS_LOGGING_DIR,
-                                           save_best_only=False,
-                                           save_freq="epoch"))
+# save checkpoints only on the first worker to prevent other workers from corrupting them.
+_checkpoints_logging = (keras.callbacks
+                             .ModelCheckpoint(f"{LOGGING_DIR}/checkpoints",
+                                              save_best_only=False,
+                                              save_freq="epoch"))
+_tensorboard_logging = (keras.callbacks
+                             .TensorBoard(f"{LOGGING_DIR}/tensorboard"))
 
 if hvd.rank() == 0:
-    _callbacks.append(_model_checkpoint)
+    _callbacks.extend([_checkpoints_logging, _tensorboard_logging])
     
-             
-results = model_fn.fit(training_dataset,
-                       epochs=args.epochs,
-                       steps_per_epoch=(N_TRAINING_IMAGES // 100) // args.batch_size,
-                       validation_data=validation_dataset,
-                       verbose=VERBOSE)
 
-with open(f"{RESULTS_DIR}/results.pickle", "wb") as f:
-    pickle.dump(results, f, protocol=pickle.HIGHEST_PROTOCOL)
+# model training loop
+model_fn.fit(training_dataset,
+             epochs=args.epochs,
+             steps_per_epoch=N_TRAINING_IMAGES // args.batch_size,
+             validation_data=validation_dataset,
+             verbose=VERBOSE,
+             callbacks=_callbacks)
