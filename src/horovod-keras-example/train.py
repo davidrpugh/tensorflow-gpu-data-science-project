@@ -111,20 +111,19 @@ def preprocess(image):
 
 
 def make_training_dataset(batch_size: int,
-                          cache_preprocessed_dataset: bool,
                           num_parallel_calls: int,
                           prefetch_buffer_size: int,
                           seed: int,
                           shuffle_buffer_size: int,
                           training_data_dir: pathlib.Path) -> tf.data.Dataset:
-    _dataset = (tf.data
-                  .Dataset
-                  .list_files(f"{training_data_dir}/*/*", shuffle=True, seed=seed)
-                  .map(preprocess, num_parallel_calls)
-                  .shuffle(shuffle_buffer_size, reshuffle_each_iteration=True, seed=seed)
-                  .repeat()
-                  .batch(batch_size)
-                  .prefetch(prefetch_buffer_size))
+    dataset = (tf.data
+                 .Dataset
+                 .list_files(f"{training_data_dir}/*/*", shuffle=True, seed=seed)
+                 .map(preprocess, num_parallel_calls)
+                 .shuffle(shuffle_buffer_size, reshuffle_each_iteration=True, seed=seed)
+                 .repeat()
+                 .batch(batch_size)
+                 .prefetch(prefetch_buffer_size))
     return dataset
 
 
@@ -132,10 +131,9 @@ AUTOTUNE = (tf.data
               .experimental
               .AUTOTUNE)
 training_dataset = make_training_dataset(batch_size=args.batch_size,
-                                         cache_preprocessed_dataset=args.cache_training_data,
                                          num_parallel_calls=AUTOTUNE,
                                          prefetch_buffer_size=1,
-                                         seed=hvd.rank()
+                                         seed=hvd.rank(),
                                          shuffle_buffer_size=N_TRAINING_IMAGES // 100,
                                          training_data_dir=TRAINING_DATA_DIR)
 
