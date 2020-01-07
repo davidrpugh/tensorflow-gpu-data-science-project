@@ -109,33 +109,20 @@ def preprocess(image):
     img = _decode_img(img)
     return img, label
 
-
-def make_training_dataset(batch_size: int,
-                          num_parallel_calls: int,
-                          prefetch_buffer_size: int,
-                          seed: int,
-                          shuffle_buffer_size: int,
-                          training_data_dir: pathlib.Path) -> tf.data.Dataset:
-    dataset = (tf.data
-                 .Dataset
-                 .list_files(f"{training_data_dir}/*/*", shuffle=True, seed=seed)
-                 .map(preprocess, num_parallel_calls)
-                 .shuffle(shuffle_buffer_size, reshuffle_each_iteration=True, seed=seed)
-                 .repeat()
-                 .batch(batch_size)
-                 .prefetch(prefetch_buffer_size))
-    return dataset
-
-
+# allow Tensorflow to choose the amount of parallelism used in preprocessing based on number of available CPUs
 AUTOTUNE = (tf.data
               .experimental
               .AUTOTUNE)
-training_dataset = make_training_dataset(batch_size=args.batch_size,
-                                         num_parallel_calls=AUTOTUNE,
-                                         prefetch_buffer_size=1,
-                                         seed=hvd.rank(),
-                                         shuffle_buffer_size=N_TRAINING_IMAGES // 100,
-                                         training_data_dir=TRAINING_DATA_DIR)
+
+# make sure that each GPU uses a different seed so that each GPU trains on different random sample of training data
+training_dataset = (tf.data
+                      .Dataset
+                      .list_files(f"{TRAINING_DATA_DIR}/*/*", shuffle=True, seed=hvd.rank())
+                      .map(preprocess, num_parallel_calls=AUTOTUNE)
+                      .shuffle(buffer_size=N_TRAINING_IMAGES // 100, reshuffle_each_iteration=True, seed=hvd.rank())
+                      .repeat()
+                      .batch(args.batch_size)
+                      .prefetch(buffer_size=1))
 
 validation_dataset = (tf.data
                         .Dataset
@@ -152,8 +139,8 @@ _initial_lr = args.base_lr * hvd.size() # adjust initial learning rate based on 
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
 _metrics = [
-    "accuracy",
-    "top_k_categorical_accuracy"
+    keras.metrics.Accuracy(),
+    keras.metrics.TopKCategoricalAccuracy(k=5)
 ]
 
 model_fn.compile(loss=_loss_fn,
@@ -202,5 +189,6 @@ model_fn.fit(training_dataset,
              epochs=args.epochs,
              steps_per_epoch=N_TRAINING_IMAGES // (args.batch_size * hvd.size()),
              validation_data=validation_dataset,
+             validation_steps=N_VALIDATION_IMAGES // (args.val_batch_size * hvd.size()),
              verbose=VERBOSE,
              callbacks=_callbacks)
