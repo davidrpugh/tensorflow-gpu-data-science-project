@@ -116,7 +116,7 @@ def preprocess(image):
 
 def make_training_dataset(batch_size: int,
                           cache_preprocessed_dataset: bool,
-                          n_parallel_calls: int,
+                          num_parallel_calls: int,
                           prefetch_buffer_size: int,
                           seed: int,
                           shuffle_buffer_size: int,
@@ -140,16 +140,16 @@ AUTOTUNE = (tf.data
               .AUTOTUNE)
 training_dataset = make_training_dataset(batch_size=args.batch_size,
                                          cache_preprocessed_dataset=args.cache_training_data,
-                                         n_parallel_calls=AUTOTUNE,
+                                         num_parallel_calls=AUTOTUNE,
                                          prefetch_buffer_size=1,
                                          shuffle_buffer_size=N_TRAINING_IMAGES // 100,
                                          training_data_dir=TRAINING_DATA_DIR)
 
 validation_dataset = (tf.data
-                       .Dataset
-                       .list_files(f"{VALIDATION_DATA_DIR}/*/*", shuffle=False)
-                       .map(preprocess, num_parallel_calls=AUTOTUNE)
-                       .batch(args.val_batch_size))
+                        .Dataset
+                        .list_files(f"{VALIDATION_DATA_DIR}/*/*", shuffle=False)
+                        .map(preprocess, num_parallel_calls=AUTOTUNE)
+                        .batch(args.val_batch_size))
 
 # Set up the model
 model_fn = (keras.applications
@@ -208,7 +208,7 @@ if hvd.rank() == 0:
 # model training loop
 model_fn.fit(training_dataset,
              epochs=args.epochs,
-             steps_per_epoch=N_TRAINING_IMAGES // args.batch_size,
+             steps_per_epoch=N_TRAINING_IMAGES // (args.batch_size * hvd.size()),
              validation_data=validation_dataset,
              verbose=VERBOSE,
              callbacks=_callbacks)
