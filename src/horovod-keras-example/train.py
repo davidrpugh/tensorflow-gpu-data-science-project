@@ -7,17 +7,13 @@ import tensorflow.keras as keras
 import horovod.tensorflow.keras as hvd
 
 
-parser = argparse.ArgumentParser(description="TensorFlow + Horovod distributed training benchmark")
+parser = argparse.ArgumentParser(description="Horovod + Keras distributed training benchmark")
 parser.add_argument("--data-dir",
                     type=str,
                     help="path to ILSVR data")
 parser.add_argument("--logging-dir",
                     type=str,
                     help="Path to the logging directory")
-parser.add_argument("--cache-training-dataset",
-                    action="store_true",
-                    default=False,
-                    help="Whether to cache the training dataset in memory (default: False)")
 
 # Default settings from https://arxiv.org/abs/1706.02677.
 parser.add_argument("--batch-size",
@@ -124,14 +120,11 @@ def make_training_dataset(batch_size: int,
     _dataset = (tf.data
                   .Dataset
                   .list_files(f"{training_data_dir}/*/*", shuffle=True, seed=seed)
-                  .map(preprocess, num_parallel_calls))
-    # cache after preprocessing but before shuffling, batching, and prefetching
-    if cache_preprocessed_dataset:
-        _dataset.cache()
-    dataset = (_dataset.shuffle(shuffle_buffer_size, reshuffle_each_iteration=True, seed=seed)
-                       .repeat()
-                       .batch(batch_size)
-                       .prefetch(prefetch_buffer_size))
+                  .map(preprocess, num_parallel_calls)
+                  .shuffle(shuffle_buffer_size, reshuffle_each_iteration=True, seed=seed)
+                  .repeat()
+                  .batch(batch_size)
+                  .prefetch(prefetch_buffer_size))
     return dataset
 
 
@@ -142,6 +135,7 @@ training_dataset = make_training_dataset(batch_size=args.batch_size,
                                          cache_preprocessed_dataset=args.cache_training_data,
                                          num_parallel_calls=AUTOTUNE,
                                          prefetch_buffer_size=1,
+                                         seed=hvd.rank()
                                          shuffle_buffer_size=N_TRAINING_IMAGES // 100,
                                          training_data_dir=TRAINING_DATA_DIR)
 
