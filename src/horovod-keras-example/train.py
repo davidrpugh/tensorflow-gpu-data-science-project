@@ -70,13 +70,14 @@ TESTING_DATA_DIR = data_dir / "test"
 VERBOSE = 2 if hvd.rank() == 0 else 0
 LOGGING_DIR = pathlib.Path(args.logging_dir)
 
-# create the training and validation datasets
+# define variables used to create training and validation datasets
 IMG_WIDTH, IMG_HEIGHT = 224, 224
 N_TRAINING_IMAGES = 1281167
 N_VALIDATION_IMAGES = 50000
 N_TESTING_IMAGES = 100000
 CLASS_NAMES = tf.constant([item.name for item in TRAINING_DATA_DIR.glob('*')])
 
+# define some helper functions used for data preprocessing
 @tf.function
 def _get_label(file_path) -> tf.Tensor:
     # convert the path to a list of path components
@@ -85,7 +86,6 @@ def _get_label(file_path) -> tf.Tensor:
     # The second to last is the class-directory
     label = tf.equal(split_file_path[-2], CLASS_NAMES)
     return label
-
 
 @tf.function
 def _decode_img(img):
@@ -99,7 +99,6 @@ def _decode_img(img):
     img = (tf.image
              .resize(img, [IMG_WIDTH, IMG_HEIGHT]))
     return img
-
 
 @tf.function
 def preprocess(image):
