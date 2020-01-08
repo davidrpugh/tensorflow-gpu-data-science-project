@@ -138,7 +138,7 @@ _initial_lr = args.base_lr * hvd.size() # adjust initial learning rate based on 
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
 _metrics = [
-    keras.metrics.Accuracy(),
+    keras.metrics.CategoricalAccuracy(),
     keras.metrics.TopKCategoricalAccuracy(k=5)
 ]
 
