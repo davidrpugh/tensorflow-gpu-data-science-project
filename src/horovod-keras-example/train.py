@@ -92,7 +92,7 @@ def _decode_img(img):
     # convert the compressed string to a 3D uint8 tensor
     img = (tf.image
              .decode_jpeg(img, channels=3))
-    # Use `convert_image_dtype` to convert to floats in the [0,1] range.
+    # convert to floats in the [0,1] range.
     img = (tf.image
              .convert_image_dtype(img, tf.float32))
     # resize the image to the desired size.
@@ -148,38 +148,38 @@ model_fn.compile(loss=_loss_fn,
 
 # define the callbacks
 _callbacks = [
-    # Horovod: broadcast initial variable states from rank 0 to all other processes.
+    # Broadcast initial variable states from rank 0 worker to all other processes.
+    #
     # This is necessary to ensure consistent initialization of all workers when
     # training is started with random weights or restored from a checkpoint.
     hvd.callbacks.BroadcastGlobalVariablesCallback(0),
 
-    # average metrics among workers at the end of every epoch.
+    # Average metrics among workers at the end of every epoch.
     #
-    # Note: This callback must be in the list before the ReduceLROnPlateau,
+    # This callback must be in the list before the ReduceLROnPlateau,
     # TensorBoard, or other metrics-based callbacks.
     hvd.callbacks.MetricAverageCallback(),
     
-    # using `lr = 1.0 * hvd.size()` from the very beginning leads to worse final
+    # Using `lr = 1.0 * hvd.size()` from the very beginning leads to worse final
     # accuracy. Scale the learning rate `lr = 1.0` ---> `lr = 1.0 * hvd.size()` during
     # the first five epochs. See https://arxiv.org/abs/1706.02677 for details.
     hvd.callbacks.LearningRateWarmupCallback(warmup_epochs=args.warmup_epochs, verbose=VERBOSE),
 
-    # after the warmup reduce learning rate by 10 on the 30th, 60th and 80th epochs.
+    # After the warmup reduce learning rate by 10 on the 30th, 60th and 80th epochs.
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=args.warmup_epochs, end_epoch=30, multiplier=1.),
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=30, end_epoch=60, multiplier=1e-1),
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=60, end_epoch=80, multiplier=1e-2),
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=80, multiplier=1e-3),
 ]
 
-# save checkpoints only on the first worker to prevent other workers from corrupting them.
-_checkpoints_logging = (keras.callbacks
-                             .ModelCheckpoint(f"{LOGGING_DIR}/checkpoints",
-                                              save_best_only=False,
-                                              save_freq="epoch"))
-_tensorboard_logging = (keras.callbacks
-                             .TensorBoard(f"{LOGGING_DIR}/tensorboard"))
-
+# Logging callbacks only on the rank 0 worker to prevent other workers from corrupting them.
 if hvd.rank() == 0:
+    _checkpoints_logging = (keras.callbacks
+                                 .ModelCheckpoint(f"{LOGGING_DIR}/checkpoints",
+                                                  save_best_only=False,
+                                                  save_freq="epoch"))
+    _tensorboard_logging = (keras.callbacks
+                                 .TensorBoard(f"{LOGGING_DIR}/tensorboard"))
     _callbacks.extend([_checkpoints_logging, _tensorboard_logging])
     
 
