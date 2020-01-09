@@ -141,11 +141,16 @@ validation_dataset = (tf.data
 # Set up the model
 model_fn = (keras.applications
                  .ResNet50(weights=None, include_top=True))
+
 _loss_fn = (keras.losses
                  .CategoricalCrossentropy())
-_initial_lr = args.base_lr * hvd.size() # adjust initial learning rate based on number of GPUs.
+
+# adjust initial learning rate based on number of GPUs
+_initial_lr = args.base_lr * hvd.size() 
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
+_distributed_optimizer = hvd.DistributedOptimizer(_optimizer)
+
 _metrics = [
     keras.metrics.CategoricalAccuracy(),
     keras.metrics.TopKCategoricalAccuracy(k=5)
@@ -153,7 +158,9 @@ _metrics = [
 
 model_fn.compile(loss=_loss_fn,
                  optimizer=_optimizer,
-                 metrics=_metrics)      
+                 metrics=_metrics,
+                 experimental_run_tf_function=False,
+                )      
 
 # define the callbacks
 _callbacks = [
