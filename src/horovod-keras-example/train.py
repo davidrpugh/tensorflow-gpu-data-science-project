@@ -60,6 +60,7 @@ args = parser.parse_args()
 
 # initialize Horovod.
 hvd.init()
+tf.random.set_seed(args.seed)
 
 # pin GPU to be used to process local rank (one GPU per process)
 gpus = tf.config.experimental.list_physical_devices("GPU")
