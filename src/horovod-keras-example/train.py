@@ -154,16 +154,14 @@ for _epoch in range(args.epochs, 0, -1):
         checkpoint_filepath = _checkpoint_filepath
         initial_epoch = _epoch
         break
-print(initial_epoch)
 hvd.broadcast(initial_epoch, root_rank=0, name='initial_epoch')
 
 # If checkpoint exists, then restore on the first worker (and broadcast weights to other workers)
 if checkpoint_filepath is not None and hvd.rank() == 0:
-    print(checkpoint_filepath)
     model_fn = hvd.load_model(checkpoint_filepath)
 else:    
     model_fn = (keras.applications
-                     .ResNet50(weights=None, include_top=True))
+                     .ResNet50(weights=None))
     
     _loss_fn = (keras.losses
                      .CategoricalCrossentropy())
@@ -219,14 +217,13 @@ if hvd.rank() == 0:
     _tensorboard_logging = (keras.callbacks
                                  .TensorBoard(tensorboard_logging_dir))
     _callbacks.extend([_checkpoints_logging, _tensorboard_logging])
-    
 
 # model training loop
 model_fn.fit(training_dataset,
              epochs=args.epochs,
              initial_epoch=initial_epoch,
-             steps_per_epoch= 10, #n_training_images // (args.batch_size * hvd.size()),
+             steps_per_epoch=n_training_images // (args.batch_size * hvd.size()),
              validation_data=validation_dataset,
-             validation_steps=10, #n_validation_images // (args.val_batch_size * hvd.size()),
+             validation_steps=n_validation_images // (args.val_batch_size * hvd.size()),
              verbose=verbose,
              callbacks=_callbacks)
