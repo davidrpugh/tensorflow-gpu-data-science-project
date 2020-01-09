@@ -15,6 +15,6 @@ dependencies:
   - openmpi=4.0
   - pip=19.3
   - pip:
-    - tf-nightly-gpu # needs to be installed prior to building horovod
+    - tf-nightly-gpu==2.1.0.dev20191203 # needs to be installed prior to building horovod
     - -r file:requirements.txt
   - python=3.6

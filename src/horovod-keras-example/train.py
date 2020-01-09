@@ -171,7 +171,7 @@ else:
     model_fn.compile(loss=_loss_fn,
                      optimizer=_distributed_optimizer,
                      metrics=_metrics,
-                     experimental_run_tf_function=False)      
+                     experimental_run_tf_function=False)
 
 _callbacks = [
     # Broadcast initial variable states from rank 0 worker to all other processes.
