@@ -140,7 +140,7 @@ validation_dataset = (tf.data
 
 # Set up the model
 model_fn = (keras.applications
-                 .ResNet50(weights=None, include_top=True))
+                 .ResNet50(weights=None))
 
 _loss_fn = (keras.losses
                  .CategoricalCrossentropy())
@@ -157,7 +157,7 @@ _metrics = [
 ]
 
 model_fn.compile(loss=_loss_fn,
-                 optimizer=_optimizer,
+                 optimizer=_distributed_optimizer,
                  metrics=_metrics,
                  experimental_run_tf_function=False,
                 )      
@@ -202,8 +202,8 @@ if hvd.rank() == 0:
 # model training loop
 model_fn.fit(training_dataset,
              epochs=args.epochs,
-             steps_per_epoch=N_TRAINING_IMAGES // (args.batch_size * hvd.size()),
+             steps_per_epoch= 10, #N_TRAINING_IMAGES // (args.batch_size * hvd.size()),
              validation_data=validation_dataset,
-             validation_steps=N_VALIDATION_IMAGES // (args.val_batch_size * hvd.size()),
+             validation_steps=10, #N_VALIDATION_IMAGES // (args.val_batch_size * hvd.size()),
              verbose=VERBOSE,
              callbacks=_callbacks)
