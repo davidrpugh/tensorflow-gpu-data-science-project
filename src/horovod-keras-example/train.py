@@ -10,7 +10,15 @@ import horovod.tensorflow.keras as hvd
 parser = argparse.ArgumentParser(description="Horovod + Keras distributed training benchmark")
 parser.add_argument("--data-dir",
                     type=str,
-                    help="path to ILSVR data")
+                    help="Path to ILSVR data")
+parser.add_argument("--shuffle-buffer-size",
+                    type=int,
+                    default=12811,
+                    help="Size of the shuffle buffer (default buffer size 1% of all training images)")
+parser.add_argument("--prefetch-buffer-size",
+                    type=int,
+                    default=1,
+                    help="Size of the prefetch buffer")
 parser.add_argument("--logging-dir",
                     type=str,
                     help="Path to the logging directory")
@@ -118,10 +126,10 @@ training_dataset = (tf.data
                       .Dataset
                       .list_files(f"{TRAINING_DATA_DIR}/*/*", shuffle=True, seed=hvd.rank())
                       .map(preprocess, num_parallel_calls=AUTOTUNE)
-                      .shuffle(buffer_size=N_TRAINING_IMAGES // 100, reshuffle_each_iteration=True, seed=hvd.rank())
+                      .shuffle(args.shuffle_buffer_size, reshuffle_each_iteration=True, seed=hvd.rank())
                       .repeat()
                       .batch(args.batch_size)
-                      .prefetch(buffer_size=1))
+                      .prefetch(args.prefetch_buffer_size))
 
 validation_dataset = (tf.data
                         .Dataset
