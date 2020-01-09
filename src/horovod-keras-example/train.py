@@ -59,44 +59,48 @@ parser.add_argument("--seed",
                     help="random seed")
 args = parser.parse_args()
 
-# initialize Horovod.
 hvd.init()
 tf.random.set_seed(args.seed)
 
-# pin GPU to be used to process local rank (one GPU per process)
+# Pin GPU to be used to process local rank (one GPU per process)
 gpus = tf.config.experimental.list_physical_devices("GPU")
 for gpu in gpus:
     tf.config.experimental.set_memory_growth(gpu, True)
 if gpus:
     tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], "GPU")
 
-# define the data directories
+# define the data and logging directories
 data_dir = pathlib.Path(args.data_dir)
-TRAINING_DATA_DIR = data_dir / "train"
-VALIDATION_DATA_DIR = data_dir / "val"
-TESTING_DATA_DIR = data_dir / "test"
+training_data_dir = data_dir / "train"
+validation_data_dir = data_dir / "val"
+testing_data_dir = data_dir / "test"
 
-# define the logging directories
-VERBOSE = 2 if hvd.rank() == 0 else 0
-LOGGING_DIR = pathlib.Path(args.logging_dir)
-CHECKPOINTS_LOGGING_DIR = LOGGING_DIR / "checkpoints"
-TENSORBOARD_LOGGING_DIR = LOGGING_DIR / "tensorboard"
+# only log from first worker to avoid logging data corruption
+verbose = 2 if hvd.rank() == 0 else 0
+logging_dir = pathlib.Path(args.logging_dir)
 
-# define variables used to create training and validation datasets
-IMG_WIDTH, IMG_HEIGHT = 224, 224
-N_TRAINING_IMAGES = 1281167
-N_VALIDATION_IMAGES = 50000
-N_TESTING_IMAGES = 100000
-CLASS_NAMES = tf.constant([item.name for item in TRAINING_DATA_DIR.glob('*')])
+checkpoints_logging_dir = logging_dir / "checkpoints"
+if not os.path.isdir(checkpoints_logging_dir):
+    os.mkdir(checkpoints_logging_dir)
 
-# define some helper functions used for data preprocessing
+tensorboard_logging_dir = logging_dir / "tensorboard"
+if not os.path.isdir(tensorboard_logging_dir):
+    os.mkdir(tensorboard_logging_dir)
+
+# define constants used in data preprocessing
+img_width, img_height = 224, 224
+n_training_images = 1281167
+n_validation_images = 50000
+n_testing_images = 100000
+class_names = tf.constant([item.name for item in training_data_dir.glob('*')])
+
 @tf.function
 def _get_label(file_path) -> tf.Tensor:
     # convert the path to a list of path components
     split_file_path = (tf.strings
                          .split(file_path, '/'))
     # The second to last is the class-directory
-    label = tf.equal(split_file_path[-2], CLASS_NAMES)
+    label = tf.equal(split_file_path[-2], class_names)
     return label
 
 @tf.function
@@ -109,7 +113,7 @@ def _decode_img(img):
              .convert_image_dtype(img, tf.float32))
     # resize the image to the desired size.
     img = (tf.image
-             .resize(img, [IMG_WIDTH, IMG_HEIGHT]))
+             .resize(img, [img_width, img_height]))
     return img
 
 @tf.function
@@ -128,7 +132,7 @@ AUTOTUNE = (tf.data
 # make sure that each GPU uses a different seed so that each GPU trains on different random sample of training data
 training_dataset = (tf.data
                       .Dataset
-                      .list_files(f"{TRAINING_DATA_DIR}/*/*", shuffle=True, seed=hvd.rank())
+                      .list_files(f"{training_data_dir}/*/*", shuffle=True, seed=hvd.rank())
                       .map(preprocess, num_parallel_calls=AUTOTUNE)
                       .shuffle(args.shuffle_buffer_size, reshuffle_each_iteration=True, seed=hvd.rank())
                       .repeat()
@@ -137,18 +141,25 @@ training_dataset = (tf.data
 
 validation_dataset = (tf.data
                         .Dataset
-                        .list_files(f"{VALIDATION_DATA_DIR}/*/*", shuffle=False)
+                        .list_files(f"{validation_data_dir}/*/*", shuffle=False)
                         .map(preprocess, num_parallel_calls=AUTOTUNE)
                         .batch(args.val_batch_size))
 
+# Look for a pre-existing checkpoint from which to resume training
 checkpoint_filepath = None
+initial_epoch = 0
 for _epoch in range(args.epochs, 0, -1):
-    _checkpoint_filepath = f"{CHECKPOINTS_LOGGING_DIR}/checkpoint-epoch-{_epoch}.hdf5"
+    _checkpoint_filepath = f"{checkpoints_logging_dir}/checkpoint-epoch-{_epoch:02d}.h5"
     if os.path.exists(_checkpoint_filepath):
         checkpoint_filepath = _checkpoint_filepath
+        initial_epoch = _epoch
+        break
+print(initial_epoch)
+hvd.broadcast(initial_epoch, root_rank=0, name='initial_epoch')
 
-# Restore on the first worker which will broadcast both model and optimizer weights to other workers.
+# If checkpoint exists, then restore on the first worker (and broadcast weights to other workers)
 if checkpoint_filepath is not None and hvd.rank() == 0:
+    print(checkpoint_filepath)
     model_fn = hvd.load_model(checkpoint_filepath)
 else:    
     model_fn = (keras.applications
@@ -171,7 +182,8 @@ else:
     model_fn.compile(loss=_loss_fn,
                      optimizer=_distributed_optimizer,
                      metrics=_metrics,
-                     experimental_run_tf_function=False)
+                     experimental_run_tf_function=False, # required for Horovod to work with TF 2.0
+                    )
 
 _callbacks = [
     # Broadcast initial variable states from rank 0 worker to all other processes.
@@ -189,7 +201,7 @@ _callbacks = [
     # Using `lr = 1.0 * hvd.size()` from the very beginning leads to worse final
     # accuracy. Scale the learning rate `lr = 1.0` ---> `lr = 1.0 * hvd.size()` during
     # the first five epochs. See https://arxiv.org/abs/1706.02677 for details.
-    hvd.callbacks.LearningRateWarmupCallback(warmup_epochs=args.warmup_epochs, verbose=VERBOSE),
+    hvd.callbacks.LearningRateWarmupCallback(warmup_epochs=args.warmup_epochs, verbose=verbose),
 
     # After the warmup reduce learning rate by 10 on the 30th, 60th and 80th epochs.
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=args.warmup_epochs, end_epoch=30, multiplier=1.),
@@ -201,19 +213,20 @@ _callbacks = [
 # Logging callbacks only on the rank 0 worker to prevent other workers from corrupting them.
 if hvd.rank() == 0:
     _checkpoints_logging = (keras.callbacks
-                                 .ModelCheckpoint(f"{CHECKPOINTS_LOGGING_DIR}/checkpoint-{{epoch:02d}}.hdf5",
+                                 .ModelCheckpoint(f"{checkpoints_logging_dir}/checkpoint-epoch-{{epoch:02d}}.h5",
                                                   save_best_only=False,
                                                   save_freq="epoch"))
     _tensorboard_logging = (keras.callbacks
-                                 .TensorBoard(TENSORBOARD_LOGGING_DIR))
+                                 .TensorBoard(tensorboard_logging_dir))
     _callbacks.extend([_checkpoints_logging, _tensorboard_logging])
     
 
 # model training loop
 model_fn.fit(training_dataset,
              epochs=args.epochs,
-             steps_per_epoch= 10, #N_TRAINING_IMAGES // (args.batch_size * hvd.size()),
+             initial_epoch=initial_epoch,
+             steps_per_epoch= 10, #n_training_images // (args.batch_size * hvd.size()),
              validation_data=validation_dataset,
-             validation_steps=10, #N_VALIDATION_IMAGES // (args.val_batch_size * hvd.size()),
-             verbose=VERBOSE,
+             validation_steps=10, #n_validation_images // (args.val_batch_size * hvd.size()),
+             verbose=verbose,
              callbacks=_callbacks)
