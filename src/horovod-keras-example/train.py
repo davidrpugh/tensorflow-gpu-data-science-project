@@ -1,4 +1,5 @@
 import argparse
+import os
 import pathlib
 
 import numpy as np
@@ -78,6 +79,8 @@ TESTING_DATA_DIR = data_dir / "test"
 # define the logging directories
 VERBOSE = 2 if hvd.rank() == 0 else 0
 LOGGING_DIR = pathlib.Path(args.logging_dir)
+CHECKPOINTS_LOGGING_DIR = LOGGING_DIR / "checkpoints"
+TENSORBOARD_LOGGING_DIR = LOGGING_DIR / "tensorboard"
 
 # define variables used to create training and validation datasets
 IMG_WIDTH, IMG_HEIGHT = 224, 224
@@ -138,24 +141,38 @@ validation_dataset = (tf.data
                         .map(preprocess, num_parallel_calls=AUTOTUNE)
                         .batch(args.val_batch_size))
 
-# Set up the model
-model_fn = (keras.applications
-                 .ResNet50(weights=None, include_top=True))
-_loss_fn = (keras.losses
-                 .CategoricalCrossentropy())
-_initial_lr = args.base_lr * hvd.size() # adjust initial learning rate based on number of GPUs.
-_optimizer = (keras.optimizers
-                   .SGD(lr=_initial_lr, momentum=args.momentum))
-_metrics = [
-    keras.metrics.CategoricalAccuracy(),
-    keras.metrics.TopKCategoricalAccuracy(k=5)
-]
+checkpoint_filepath = None
+for _epoch in range(args.epochs, 0, -1):
+    _checkpoint_filepath = f"{CHECKPOINTS_LOGGING_DIR}/checkpoint-epoch-{_epoch}.hdf5"
+    if os.path.exists(_checkpoint_filepath):
+        checkpoint_filepath = _checkpoint_filepath
 
-model_fn.compile(loss=_loss_fn,
-                 optimizer=_optimizer,
-                 metrics=_metrics)      
+# Restore on the first worker which will broadcast both model and optimizer weights to other workers.
+if checkpoint_filepath is not None and hvd.rank() == 0:
+    model_fn = hvd.load_model(checkpoint_filepath)
+else:    
+    model_fn = (keras.applications
+                     .ResNet50(weights=None, include_top=True))
+    
+    _loss_fn = (keras.losses
+                     .CategoricalCrossentropy())
+    
+    # adjust initial learning rate for optimizer based on number of GPUs.
+    _initial_lr = args.base_lr * hvd.size() 
+    _optimizer = (keras.optimizers
+                       .SGD(lr=_initial_lr, momentum=args.momentum))
+    _distributed_optimizer = hvd.DistributedOptimizer(_optimizer)
 
-# define the callbacks
+    _metrics = [
+        keras.metrics.CategoricalAccuracy(),
+        keras.metrics.TopKCategoricalAccuracy(k=5)
+    ]
+
+    model_fn.compile(loss=_loss_fn,
+                     optimizer=_distributed_optimizer,
+                     metrics=_metrics,
+                     experimental_run_tf_function=False)      
+
 _callbacks = [
     # Broadcast initial variable states from rank 0 worker to all other processes.
     #
@@ -184,19 +201,19 @@ _callbacks = [
 # Logging callbacks only on the rank 0 worker to prevent other workers from corrupting them.
 if hvd.rank() == 0:
     _checkpoints_logging = (keras.callbacks
-                                 .ModelCheckpoint(f"{LOGGING_DIR}/checkpoints",
+                                 .ModelCheckpoint(f"{CHECKPOINTS_LOGGING_DIR}/checkpoint-{{epoch:02d}}.hdf5",
                                                   save_best_only=False,
                                                   save_freq="epoch"))
     _tensorboard_logging = (keras.callbacks
-                                 .TensorBoard(f"{LOGGING_DIR}/tensorboard"))
+                                 .TensorBoard(TENSORBOARD_LOGGING_DIR))
     _callbacks.extend([_checkpoints_logging, _tensorboard_logging])
     
 
 # model training loop
 model_fn.fit(training_dataset,
              epochs=args.epochs,
-             steps_per_epoch=N_TRAINING_IMAGES // (args.batch_size * hvd.size()),
+             steps_per_epoch= 10, #N_TRAINING_IMAGES // (args.batch_size * hvd.size()),
              validation_data=validation_dataset,
-             validation_steps=N_VALIDATION_IMAGES // (args.val_batch_size * hvd.size()),
+             validation_steps=10, #N_VALIDATION_IMAGES // (args.val_batch_size * hvd.size()),
              verbose=VERBOSE,
              callbacks=_callbacks)
