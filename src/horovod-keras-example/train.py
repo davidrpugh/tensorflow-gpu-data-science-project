@@ -1,4 +1,5 @@
 import argparse
+import os
 import pathlib
 
 import numpy as np
@@ -10,7 +11,15 @@ import horovod.tensorflow.keras as hvd
 parser = argparse.ArgumentParser(description="Horovod + Keras distributed training benchmark")
 parser.add_argument("--data-dir",
                     type=str,
-                    help="path to ILSVR data")
+                    help="Path to ILSVR data")
+parser.add_argument("--shuffle-buffer-size",
+                    type=int,
+                    default=12811,
+                    help="Size of the shuffle buffer (default buffer size 1% of all training images)")
+parser.add_argument("--prefetch-buffer-size",
+                    type=int,
+                    default=1,
+                    help="Size of the prefetch buffer")
 parser.add_argument("--logging-dir",
                     type=str,
                     help="Path to the logging directory")
@@ -50,41 +59,48 @@ parser.add_argument("--seed",
                     help="random seed")
 args = parser.parse_args()
 
-# initialize Horovod.
 hvd.init()
+tf.random.set_seed(args.seed)
 
-# pin GPU to be used to process local rank (one GPU per process)
+# Pin GPU to be used to process local rank (one GPU per process)
 gpus = tf.config.experimental.list_physical_devices("GPU")
 for gpu in gpus:
     tf.config.experimental.set_memory_growth(gpu, True)
 if gpus:
     tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], "GPU")
 
-# define the data directories
+# define the data and logging directories
 data_dir = pathlib.Path(args.data_dir)
-TRAINING_DATA_DIR = data_dir / "train"
-VALIDATION_DATA_DIR = data_dir / "val"
-TESTING_DATA_DIR = data_dir / "test"
+training_data_dir = data_dir / "train"
+validation_data_dir = data_dir / "val"
+testing_data_dir = data_dir / "test"
 
-# define the logging directories
-VERBOSE = 2 if hvd.rank() == 0 else 0
-LOGGING_DIR = pathlib.Path(args.logging_dir)
+# only log from first worker to avoid logging data corruption
+verbose = 2 if hvd.rank() == 0 else 0
+logging_dir = pathlib.Path(args.logging_dir)
 
-# define variables used to create training and validation datasets
-IMG_WIDTH, IMG_HEIGHT = 224, 224
-N_TRAINING_IMAGES = 1281167
-N_VALIDATION_IMAGES = 50000
-N_TESTING_IMAGES = 100000
-CLASS_NAMES = tf.constant([item.name for item in TRAINING_DATA_DIR.glob('*')])
+checkpoints_logging_dir = logging_dir / "checkpoints"
+if not os.path.isdir(checkpoints_logging_dir):
+    os.mkdir(checkpoints_logging_dir)
 
-# define some helper functions used for data preprocessing
+tensorboard_logging_dir = logging_dir / "tensorboard"
+if not os.path.isdir(tensorboard_logging_dir):
+    os.mkdir(tensorboard_logging_dir)
+
+# define constants used in data preprocessing
+img_width, img_height = 224, 224
+n_training_images = 1281167
+n_validation_images = 50000
+n_testing_images = 100000
+class_names = tf.constant([item.name for item in training_data_dir.glob('*')])
+
 @tf.function
 def _get_label(file_path) -> tf.Tensor:
     # convert the path to a list of path components
     split_file_path = (tf.strings
                          .split(file_path, '/'))
     # The second to last is the class-directory
-    label = tf.equal(split_file_path[-2], CLASS_NAMES)
+    label = tf.equal(split_file_path[-2], class_names)
     return label
 
 @tf.function
@@ -92,12 +108,12 @@ def _decode_img(img):
     # convert the compressed string to a 3D uint8 tensor
     img = (tf.image
              .decode_jpeg(img, channels=3))
-    # Use `convert_image_dtype` to convert to floats in the [0,1] range.
+    # convert to floats in the [0,1] range.
     img = (tf.image
              .convert_image_dtype(img, tf.float32))
     # resize the image to the desired size.
     img = (tf.image
-             .resize(img, [IMG_WIDTH, IMG_HEIGHT]))
+             .resize(img, [img_width, img_height]))
     return img
 
 @tf.function
@@ -116,78 +132,99 @@ AUTOTUNE = (tf.data
 # make sure that each GPU uses a different seed so that each GPU trains on different random sample of training data
 training_dataset = (tf.data
                       .Dataset
-                      .list_files(f"{TRAINING_DATA_DIR}/*/*", shuffle=True, seed=hvd.rank())
+                      .list_files(f"{training_data_dir}/*/*", shuffle=True, seed=hvd.rank())
                       .map(preprocess, num_parallel_calls=AUTOTUNE)
-                      .shuffle(buffer_size=N_TRAINING_IMAGES // 100, reshuffle_each_iteration=True, seed=hvd.rank())
+                      .shuffle(args.shuffle_buffer_size, reshuffle_each_iteration=True, seed=hvd.rank())
                       .repeat()
                       .batch(args.batch_size)
-                      .prefetch(buffer_size=1))
+                      .prefetch(args.prefetch_buffer_size))
 
 validation_dataset = (tf.data
                         .Dataset
-                        .list_files(f"{VALIDATION_DATA_DIR}/*/*", shuffle=False)
+                        .list_files(f"{validation_data_dir}/*/*", shuffle=False)
                         .map(preprocess, num_parallel_calls=AUTOTUNE)
                         .batch(args.val_batch_size))
+    
+# Look for a pre-existing checkpoint from which to resume training
+checkpoint_filepath = None
+initial_epoch = 0
+for _most_recent_epoch in range(args.epochs, 0, -1):
+    _checkpoint_filepath = f"{checkpoints_logging_dir}/checkpoint-epoch-{_most_recent_epoch:02d}.h5"
+    if os.path.exists(_checkpoint_filepath):
+        checkpoint_filepath = _checkpoint_filepath
+        initial_epoch = _most_recent_epoch
+        break
+        
+# make sure that all workers agree to resume training from the same epoch
+intial_epoch = hvd.broadcast(initial_epoch, root_rank=0, name='initial_epoch')
 
-# Set up the model
-model_fn = (keras.applications
-                 .ResNet50(weights=None, include_top=True))
 _loss_fn = (keras.losses
                  .CategoricalCrossentropy())
-_initial_lr = args.base_lr * hvd.size() # adjust initial learning rate based on number of GPUs.
+    
+# adjust initial learning rate based on number of GPUs.
+_initial_lr = args.base_lr * hvd.size() 
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
+_distributed_optimizer = hvd.DistributedOptimizer(_optimizer)
+
 _metrics = [
     keras.metrics.CategoricalAccuracy(),
     keras.metrics.TopKCategoricalAccuracy(k=5)
 ]
 
-model_fn.compile(loss=_loss_fn,
-                 optimizer=_optimizer,
-                 metrics=_metrics)      
+model_fn = (keras.applications
+                 .ResNet50(weights=None))
 
-# define the callbacks
-_callbacks = [
-    # Horovod: broadcast initial variable states from rank 0 to all other processes.
+# restore checkpoint on rank 0 worker (weights will be broadcast to all other workers)
+if checkpoint_filepath is not None and hvd.rank() == 0:
+    model_fn.load_weights(checkpoint_filepath)
+
+model_fn.compile(loss=_loss_fn,
+                 optimizer=_distributed_optimizer,
+                 metrics=_metrics,
+                 experimental_run_tf_function=False, # required for Horovod to work with TF 2.0
+                 )
+
+callbacks = [
+    # Broadcast initial variable states from rank 0 worker to all other processes.
+    #
     # This is necessary to ensure consistent initialization of all workers when
     # training is started with random weights or restored from a checkpoint.
-    hvd.callbacks.BroadcastGlobalVariablesCallback(0),
+    hvd.callbacks.BroadcastGlobalVariablesCallback(root_rank=0),
 
-    # average metrics among workers at the end of every epoch.
+    # Average metrics among workers at the end of every epoch.
     #
-    # Note: This callback must be in the list before the ReduceLROnPlateau,
+    # This callback must be in the list before the ReduceLROnPlateau,
     # TensorBoard, or other metrics-based callbacks.
     hvd.callbacks.MetricAverageCallback(),
     
-    # using `lr = 1.0 * hvd.size()` from the very beginning leads to worse final
+    # Using `lr = 1.0 * hvd.size()` from the very beginning leads to worse final
     # accuracy. Scale the learning rate `lr = 1.0` ---> `lr = 1.0 * hvd.size()` during
     # the first five epochs. See https://arxiv.org/abs/1706.02677 for details.
-    hvd.callbacks.LearningRateWarmupCallback(warmup_epochs=args.warmup_epochs, verbose=VERBOSE),
+    hvd.callbacks.LearningRateWarmupCallback(warmup_epochs=args.warmup_epochs, verbose=verbose),
 
-    # after the warmup reduce learning rate by 10 on the 30th, 60th and 80th epochs.
+    # After the warmup reduce learning rate by 10 on the 30th, 60th and 80th epochs.
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=args.warmup_epochs, end_epoch=30, multiplier=1.),
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=30, end_epoch=60, multiplier=1e-1),
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=60, end_epoch=80, multiplier=1e-2),
     hvd.callbacks.LearningRateScheduleCallback(start_epoch=80, multiplier=1e-3),
 ]
 
-# save checkpoints only on the first worker to prevent other workers from corrupting them.
-_checkpoints_logging = (keras.callbacks
-                             .ModelCheckpoint(f"{LOGGING_DIR}/checkpoints",
-                                              save_best_only=False,
-                                              save_freq="epoch"))
-_tensorboard_logging = (keras.callbacks
-                             .TensorBoard(f"{LOGGING_DIR}/tensorboard"))
-
+# Logging callbacks only on the rank 0 worker to prevent other workers from corrupting them.
 if hvd.rank() == 0:
-    _callbacks.extend([_checkpoints_logging, _tensorboard_logging])
-    
+    _checkpoints_logging = (keras.callbacks
+                                 .ModelCheckpoint(f"{checkpoints_logging_dir}/checkpoint-epoch-{{epoch:02d}}.h5",
+                                                  save_best_only=False,
+                                                  save_freq="epoch"))
+    _tensorboard_logging = (keras.callbacks
+                                 .TensorBoard(tensorboard_logging_dir))
+    callbacks.extend([_checkpoints_logging, _tensorboard_logging])
 
-# model training loop
 model_fn.fit(training_dataset,
              epochs=args.epochs,
-             steps_per_epoch=N_TRAINING_IMAGES // (args.batch_size * hvd.size()),
+             initial_epoch=initial_epoch,
+             steps_per_epoch=n_training_images // (args.batch_size * hvd.size()),
              validation_data=validation_dataset,
-             validation_steps=N_VALIDATION_IMAGES // (args.val_batch_size * hvd.size()),
-             verbose=VERBOSE,
-             callbacks=_callbacks)
+             validation_steps=n_validation_images // (args.val_batch_size * hvd.size()),
+             verbose=verbose,
+             callbacks=callbacks)
