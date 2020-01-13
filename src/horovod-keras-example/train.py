@@ -144,51 +144,53 @@ validation_dataset = (tf.data
                         .list_files(f"{validation_data_dir}/*/*", shuffle=False)
                         .map(preprocess, num_parallel_calls=AUTOTUNE)
                         .batch(args.val_batch_size))
-
+    
 # Look for a pre-existing checkpoint from which to resume training
 checkpoint_filepath = None
 initial_epoch = 0
-for _epoch in range(args.epochs, 0, -1):
-    _checkpoint_filepath = f"{checkpoints_logging_dir}/checkpoint-epoch-{_epoch:02d}.h5"
+for _most_recent_epoch in range(args.epochs, 0, -1):
+    _checkpoint_filepath = f"{checkpoints_logging_dir}/checkpoint-epoch-{_most_recent_epoch:02d}.h5"
     if os.path.exists(_checkpoint_filepath):
         checkpoint_filepath = _checkpoint_filepath
-        initial_epoch = _epoch
+        initial_epoch = _most_recent_epoch
         break
-hvd.broadcast(initial_epoch, root_rank=0, name='initial_epoch')
+        
+# make sure that all workers agree to resume training from the same epoch
+intial_epoch = hvd.broadcast(initial_epoch, root_rank=0, name='initial_epoch')
 
-# If checkpoint exists, then restore on the first worker (and broadcast weights to other workers)
+_loss_fn = (keras.losses
+                 .CategoricalCrossentropy())
+    
+# adjust initial learning rate based on number of GPUs.
+_initial_lr = args.base_lr * hvd.size() 
+_optimizer = (keras.optimizers
+                   .SGD(lr=_initial_lr, momentum=args.momentum))
+_distributed_optimizer = hvd.DistributedOptimizer(_optimizer)
+
+_metrics = [
+    keras.metrics.CategoricalAccuracy(),
+    keras.metrics.TopKCategoricalAccuracy(k=5)
+]
+
+model_fn = (keras.applications
+                 .ResNet50(weights=None))
+
+# restore checkpoint on rank 0 worker (weights will be broadcast to all other workers)
 if checkpoint_filepath is not None and hvd.rank() == 0:
-    model_fn = hvd.load_model(checkpoint_filepath)
-else:    
-    model_fn = (keras.applications
-                     .ResNet50(weights=None))
-    
-    _loss_fn = (keras.losses
-                     .CategoricalCrossentropy())
-    
-    # adjust initial learning rate for optimizer based on number of GPUs.
-    _initial_lr = args.base_lr * hvd.size() 
-    _optimizer = (keras.optimizers
-                       .SGD(lr=_initial_lr, momentum=args.momentum))
-    _distributed_optimizer = hvd.DistributedOptimizer(_optimizer)
+    model_fn.load_weights(checkpoint_filepath)
 
-    _metrics = [
-        keras.metrics.CategoricalAccuracy(),
-        keras.metrics.TopKCategoricalAccuracy(k=5)
-    ]
+model_fn.compile(loss=_loss_fn,
+                 optimizer=_distributed_optimizer,
+                 metrics=_metrics,
+                 experimental_run_tf_function=False, # required for Horovod to work with TF 2.0
+                 )
 
-    model_fn.compile(loss=_loss_fn,
-                     optimizer=_distributed_optimizer,
-                     metrics=_metrics,
-                     experimental_run_tf_function=False, # required for Horovod to work with TF 2.0
-                    )
-
-_callbacks = [
+callbacks = [
     # Broadcast initial variable states from rank 0 worker to all other processes.
     #
     # This is necessary to ensure consistent initialization of all workers when
     # training is started with random weights or restored from a checkpoint.
-    hvd.callbacks.BroadcastGlobalVariablesCallback(0),
+    hvd.callbacks.BroadcastGlobalVariablesCallback(root_rank=0),
 
     # Average metrics among workers at the end of every epoch.
     #
@@ -216,9 +218,8 @@ if hvd.rank() == 0:
                                                   save_freq="epoch"))
     _tensorboard_logging = (keras.callbacks
                                  .TensorBoard(tensorboard_logging_dir))
-    _callbacks.extend([_checkpoints_logging, _tensorboard_logging])
+    callbacks.extend([_checkpoints_logging, _tensorboard_logging])
 
-# model training loop
 model_fn.fit(training_dataset,
              epochs=args.epochs,
              initial_epoch=initial_epoch,
@@ -226,4 +227,4 @@ model_fn.fit(training_dataset,
              validation_data=validation_dataset,
              validation_steps=n_validation_images // (args.val_batch_size * hvd.size()),
              verbose=verbose,
-             callbacks=_callbacks)
+             callbacks=callbacks)
