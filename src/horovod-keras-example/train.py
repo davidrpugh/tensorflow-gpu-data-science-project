@@ -80,11 +80,11 @@ verbose = 2 if hvd.rank() == 0 else 0
 logging_dir = pathlib.Path(args.logging_dir)
 
 checkpoints_logging_dir = logging_dir / "checkpoints"
-if not os.path.isdir(checkpoints_logging_dir):
+if not os.path.isdir(checkpoints_logging_dir) and hvd.rank() == 0:
     os.mkdir(checkpoints_logging_dir)
 
 tensorboard_logging_dir = logging_dir / "tensorboard"
-if not os.path.isdir(tensorboard_logging_dir):
+if not os.path.isdir(tensorboard_logging_dir) and hvd.rank() == 0:
     os.mkdir(tensorboard_logging_dir)
 
 # define constants used in data preprocessing
