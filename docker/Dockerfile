@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.1-base-ubuntu16.04
+FROM nvidia/cuda:10.0-devel-ubuntu16.04
 
 LABEL maintainer="pughdr <david.pugh@kaust.edu.sa>"
 
@@ -58,7 +58,7 @@ WORKDIR $PROJECT_DIR
 
 # build the conda environment
 ENV ENV_PREFIX $PROJECT_DIR/env
-ENV HOROVOD_CUDA_HOME $ENV_PREFIX
+ENV HOROVOD_CUDA_HOME $CUDA_HOME
 ENV HOROVOD_NCCL_HOME $ENV_PREFIX
 ENV HOROVOD_GPU_ALLREDUCE NCCL
 RUN conda update --name base --channel defaults conda && \
