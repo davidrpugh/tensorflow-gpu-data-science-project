@@ -20,9 +20,12 @@ parser.add_argument("--prefetch-buffer-size",
                     type=int,
                     default=1,
                     help="Size of the prefetch buffer")
-parser.add_argument("--logging-dir",
+parser.add_argument("--checkpoints-logging-dir",
                     type=str,
-                    help="Path to the logging directory")
+                    help="Path to the checkpoints logging directory")
+parser.add_argument("--tensorboard-logging-dir",
+                    type=str,
+                    help="Path to the tensorboard logging directory")
 
 # Default settings from https://arxiv.org/abs/1706.02677.
 parser.add_argument("--batch-size",
@@ -77,13 +80,12 @@ testing_data_dir = data_dir / "test"
 
 # only log from first worker to avoid logging data corruption
 verbose = 2 if hvd.rank() == 0 else 0
-logging_dir = pathlib.Path(args.logging_dir)
 
-checkpoints_logging_dir = logging_dir / "checkpoints"
+checkpoints_logging_dir = pathlib.Path(args.checkpoints_logging_dir)
 if not os.path.isdir(checkpoints_logging_dir) and hvd.rank() == 0:
     os.mkdir(checkpoints_logging_dir)
 
-tensorboard_logging_dir = logging_dir / "tensorboard"
+tensorboard_logging_dir = pathlib.Path(args.tensorboard_logging_dir)
 if not os.path.isdir(tensorboard_logging_dir) and hvd.rank() == 0:
     os.mkdir(tensorboard_logging_dir)
 
