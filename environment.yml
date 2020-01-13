@@ -5,16 +5,16 @@ channels:
   - defaults
 
 dependencies:
-  - cudatoolkit-dev=10.1
   - cudnn=7.6
-  - cupti=10.1
-  - gxx_linux-64=7.3
+  - cupti=10.0
+  - cxx-compiler=1.0 # required to build horovod
   - jupyterlab=1.2
   - nccl=2.4
+  - nvcc_linux-64=10.0 # virtual package; expects cudatoolkit to be installed
   - nodejs=12.13
   - openmpi=4.0
   - pip=19.3
   - pip:
-    - tf-nightly-gpu # needs to be installed prior to building horovod
+    - tensorflow-gpu==2.0.* # needs to be installed prior to building horovod
     - -r file:requirements.txt
   - python=3.6
