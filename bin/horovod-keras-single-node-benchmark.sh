@@ -37,12 +37,13 @@ horovodrun -np $SLURM_NTASKS python $SRC_DIR/train.py \
 HOROVODRUN_PID=$!
 
 # asynchronous rsync of training logs between local and persistent storage
+RSYNC_DELAY_SECONDS=600
 HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
 while [ "${HOROVODRUN_STATE}" != "" ]
     do
         HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
         rsync -a $LOCAL_LOGGING_DIR/ $PERSISTENT_LOGGING_DIR
-        sleep 600
+        sleep $RSYNC_DELAY_SECONDS
 done
 
 # kill off the nvidia-smi process
