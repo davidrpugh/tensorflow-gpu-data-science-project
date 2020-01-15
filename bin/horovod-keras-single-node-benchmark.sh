@@ -29,7 +29,7 @@ NVIDIA_SMI_PID=$!
 
 # start the training process in the background
 SRC_DIR=../src/horovod-keras-example
-DATA_DIR=/ibex/reference/CV/ILSVR/classification-localization/data/jpeg
+DATA_DIR=/local/reference/CV/ILSVR/classification-localization/data/jpeg
 horovodrun -np $SLURM_NTASKS python $SRC_DIR/train.py \
     --data-dir $DATA_DIR \
     --checkpoints-logging-dir $LOCAL_LOGGING_DIR/checkpoints \
