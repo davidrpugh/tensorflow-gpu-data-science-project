@@ -28,9 +28,7 @@ nvidia-smi dmon --delay 60 --options DT >> $PERSISTENT_LOGGING_DIR/nvidia-smi.lo
 NVIDIA_SMI_PID=$!
 
 # start the training process in the background
-SRC_DIR=../src/horovod-keras-example
-DATA_DIR=/local/reference/CV/ILSVR/classification-localization/data/jpeg
-horovodrun -np $SLURM_NTASKS python $SRC_DIR/train.py \
+horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
     --data-dir $DATA_DIR \
     --checkpoints-logging-dir $LOCAL_LOGGING_DIR/checkpoints \
     --tensorboard-logging-dir $LOCAL_LOGGING_DIR/tensorboard &
