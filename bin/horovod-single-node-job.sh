@@ -11,27 +11,37 @@
 #SBATCH --output=../results/%x/slurm-%j.out
 #SBATCH --error=../results/%x/slurm-%j.err
 
-# Some logs will be on persistent storage
-PERSISTENT_LOGGING_DIR=../results/$SLURM_JOB_NAME/$SLURM_JOB_ID/logs
-mkdir -p $PERSISTENT_LOGGING_DIR
+# Need to define persistent storage for logging... 
+PERSISTENT_LOGGING_DIR=../results/$SLURM_JOB_NAME/logs
+PERSISTENT_CHECKPOINTS_DIR=$PERSISTENT_LOGGING_DIR/checkpoints
+PERSISTENT_TENSORBOARD_DIR=$PERSISTENT_LOGGING_DIR/tensorboard
 
-# Some logs will be on local storage
+# N.B. mkdir does not overwrite if these directories already exist
+mkdir -p $PERSISTENT_CHECKPOINTS_DIR
+mkdir -p $PERSISTENT_TENSORBOARD_DIR
+
+# ...but for best performance write checkpoints and tensorboard logs to local storage
 LOCAL_LOGGING_DIR=/tmp/$SLURM_JOB_NAME/$SLURM_JOB_ID/logs
-mkdir -p $LOCAL_LOGGING_DIR
+LOCAL_CHECKPOINTS_DIR=$LOCAL_LOGGING_DIR/checkpoints
+LOCAL_TENSORBOARD_DIR=$LOCAL_LOGGING_DIR/tensorboard
+mkdir -p $LOCAL_CHECKPOINTS_DIR
+mkdir -p $LOCAL_TENSORBOARD_DIR
 
 # Load software stack
 module load cuda/10.0.130
 conda activate ../env
 
-# start the nvidia-smi process in the background
-nvidia-smi dmon --delay 60 --options DT >> $PERSISTENT_LOGGING_DIR/nvidia-smi.log &
+# Start the nvidia-smi process in the background
+NVIDIA_SMI_DELAY_SECONDS=60
+nvidia-smi dmon --delay $NVIDIA_SMI_DELAY_SECONDS --options DT >> $PERSISTENT_LOGGING_DIR/nvidia-smi.log &
 NVIDIA_SMI_PID=$!
 
 # start the training process in the background
 horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
     --data-dir $DATA_DIR \
-    --checkpoints-logging-dir $LOCAL_LOGGING_DIR/checkpoints \
-    --tensorboard-logging-dir $LOCAL_LOGGING_DIR/tensorboard &
+    --read-checkpoints-from $PERSISTENT_CHECKPOINTS_DIR \
+    --write-checkpoints-to  $LOCAL_CHECKPOINTS_DIR \
+    --tensorboard-logging-dir $LOCAL_TENSORBOARD_DIR &
 HOROVODRUN_PID=$!
 
 # asynchronous rsync of training logs between local and persistent storage
@@ -39,14 +49,15 @@ RSYNC_DELAY_SECONDS=600
 HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
 while [ "${HOROVODRUN_STATE}" != "" ]
     do
-        HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
-        rsync -a $LOCAL_LOGGING_DIR/ $PERSISTENT_LOGGING_DIR
+        rsync -a $LOCAL_CHECKPOINTS_DIR/ $PERSISTENT_CHECKPOINTS_DIR
+        rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
         sleep $RSYNC_DELAY_SECONDS
+        HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
 done
 
 # kill off the nvidia-smi process
 kill $NVIDIA_SMI_PID
 
 # make sure to get any new files written since last rsync 
-rsync -a $LOCAL_LOGGING_DIR/ $PERSISTENT_LOGGING_DIR
-
+rsync -a $LOCAL_CHECKPOINTS_DIR/ $PERSISTENT_CHECKPOINTS_DIR
+rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR

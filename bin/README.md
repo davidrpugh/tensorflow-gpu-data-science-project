@@ -25,13 +25,21 @@ The job script can be broken down into a number of sections.
 
 ```bash
 ...
-# Some logs will be on persistent storage
-PERSISTENT_LOGGING_DIR=../results/$SLURM_JOB_NAME/$SLURM_JOB_ID/logs
-mkdir -p $PERSISTENT_LOGGING_DIR
+# Need to define persistent storage for logging... 
+PERSISTENT_LOGGING_DIR=../results/$SLURM_JOB_NAME/logs
+PERSISTENT_CHECKPOINTS_DIR=$PERSISTENT_LOGGING_DIR/checkpoints
+PERSISTENT_TENSORBOARD_DIR=$PERSISTENT_LOGGING_DIR/tensorboard
 
-# Some logs will be on local storage
+# N.B. mkdir does not overwrite if these directories already exist
+mkdir -p $PERSISTENT_CHECKPOINTS_DIR
+mkdir -p $PERSISTENT_TENSORBOARD_DIR
+
+# ...but for best performance write checkpoints and tensorboard logs to local storage
 LOCAL_LOGGING_DIR=/tmp/$SLURM_JOB_NAME/$SLURM_JOB_ID/logs
-mkdir -p $LOCAL_LOGGING_DIR
+LOCAL_CHECKPOINTS_DIR=$LOCAL_LOGGING_DIR/checkpoints
+LOCAL_TENSORBOARD_DIR=$LOCAL_LOGGING_DIR/tensorboard
+mkdir -p $LOCAL_CHECKPOINTS_DIR
+mkdir -p $LOCAL_TENSORBOARD_DIR
 ...
 HOROVODRUN_PID=$!
 
@@ -40,13 +48,16 @@ RSYNC_DELAY_SECONDS=600
 HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
 while [ "${HOROVODRUN_STATE}" != "" ]
     do
-      	HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
-        rsync -a $LOCAL_LOGGING_DIR/ $PERSISTENT_LOGGING_DIR
+        rsync -a $LOCAL_CHECKPOINTS_DIR/ $PERSISTENT_CHECKPOINTS_DIR
+        rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
         sleep $RSYNC_DELAY_SECONDS
+        HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
 done
 ...
-# make sure to get any new files written since last rsync
-rsync -a $LOCAL_LOGGING_DIR/ $PERSISTENT_LOGGING_DIR
+# make sure to get any new files written since last rsync 
+rsync -a $LOCAL_CHECKPOINTS_DIR/ $PERSISTENT_CHECKPOINTS_DIR
+rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
+
 ```
 
 #### Loading the software application stack
@@ -80,11 +91,11 @@ kill $NVIDIA_SMI_PID
 # start the training process in the background
 horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
     --data-dir $DATA_DIR \
-    --checkpoints-logging-dir $LOCAL_LOGGING_DIR/checkpoints \
-    --tensorboard-logging-dir $LOCAL_LOGGING_DIR/tensorboard &
+    --read-checkpoints-from $PERSISTENT_CHECKPOINTS_DIR \
+    --write-checkpoints-to  $LOCAL_CHECKPOINTS_DIR \
+    --tensorboard-logging-dir $LOCAL_TENSORBOARD_DIR &
 ...
 ```
-
 
 ### Submitting jobs
 
@@ -93,5 +104,5 @@ $ JOB_NAME=horovod-keras-single-node-benchmark
 $ mkdir ../results/$JOB_NAME
 $ TRAINING_SCRIPT=../src/horovod-keras-example/train.py
 $ DATA_DIR=/local/reference/CV/ILSVR/classification-localization/data/jpeg
-$ sbatch --job-name $JOB_NAME --mail-user USER_EMAIL --mail-type=ALL --export SRC_DIR=$SRC_DIR,DATA_DIR=$DATA_DIR horovod-keras-single-node-benchmark.sh
+$ sbatch --job-name $JOB_NAME --mail-user USER_EMAIL --mail-type=ALL --export SRC_DIR=$SRC_DIR,DATA_DIR=$DATA_DIR horovod-single-node-job.sh
 ```
