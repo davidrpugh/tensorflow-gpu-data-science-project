@@ -10,7 +10,7 @@ The job script can be broken down into a number of sections.
 #!/bin/bash --login
 #SBATCH --nodes=1
 #SBATCH --time=24:00:00
-#SBATCH --mem=256G
+#SBATCH --mem=0
 #SBATCH --ntasks=8
 #SBATCH --tasks-per-node=8
 #SBATCH --cpus-per-task=6
@@ -23,6 +23,15 @@ The job script can be broken down into a number of sections.
 
 #### Checkpointing
 
+Efficient checkpointing can be a bit tricky. The main concern is that the worker responsible for 
+writing the checkpoint files will be blocked from training while the checkpoint files are being 
+written. Thus we should avoid writing checkpoints directly to `/ibex/(f)scratch` which is a 
+shared file system whose performance can vary depending on overall IO load. Instead should write 
+checkpoints files to local, on-node storage. However local, on-node storage is not persistent and  
+will be wiped after the job terminates. So if we are going to write checkpoint files to local 
+storage we need to periodically sync our checkpoint files with persistent storage (in a manner 
+which will not block our training progress).
+ 
 ```bash
 ...
 # Need to define persistent storage for logging... 
@@ -57,7 +66,6 @@ done
 # make sure to get any new files written since last rsync 
 rsync -a $LOCAL_CHECKPOINTS_DIR/ $PERSISTENT_CHECKPOINTS_DIR
 rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
-
 ```
 
 #### Loading the software application stack
