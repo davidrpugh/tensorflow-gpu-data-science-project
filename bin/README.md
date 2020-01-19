@@ -1,10 +1,35 @@
 ## Slurm
 
-### Understanding the job script
+### Single node jobs
 
-The job script can be broken down into a number of sections.
+The `horovod-single-node-job.sh` job script can be broken down into a number of sections.
 
 #### Slurm directives
+
+When runnning a distributed training job with Horovod you will want to set the total number of 
+tasks (`--ntasks`) equal to the total number of GPUs requested across all nodes and set the 
+number of tasks per node (`--tasks-per-node`) equal to the number of NVIDIA V100 GPUs requested 
+per node (`--gres=gpu:v100`). In the directives below we are requesting all 8 32 GB NVIDIA 
+V100 GPUs available on a single node so we need to set `--nodes=1`, `--ntasks=8`, 
+`--tasks-per-node=8` and `--gres=gpu:v100:8`.
+
+In order to achieve top training performance, you need to request sufficient CPUs to feed the 
+training data to the GPUs. A good rule of thumb is to request 5-6 CPUs per 32 GB NVIDIA V100 GPU.
+To achieve this we set `--cpus-per-task=6` (given that `--tasks-per-node=8` this means we have 
+requested all 48 CPUs on the node). We also provide a constraing on the type of CPU requested: 
+`--constraint=cput_intel_platinum_8260` insures that all nodes have Intel "Cascade Lake" CPUs.
+
+Finally, we also need to request sufficient CPU memory. A good rule of thumb is to request at 
+least twice the CPU memory as available GPU memory. Since we have requested 8 x 32 GB = 256 GB 
+of GPU memory we should request at least 512 GB of CPU memory. However, given that we are 
+already requesting all of the GPUs and all of the CPUs on the node we might as well ask for all 
+available memory on the node by setting `--mem=0`. 
+
+Finally, we direct out the slurm output and error logs to files in particular directories. Note 
+that `%x` refers to the Slurm job name (which we specify!) and `%j` refers to the Slurm job id 
+(which Slurm specifies!). Thus our output and error files will be written into the directory 
+`../results/$JOB_NAME/` and will contain the Slurm job id as part of the file name. This 
+naming convention helps to keep our results directories neat and tidy.
 
 ```bash
 #!/bin/bash --login
@@ -31,6 +56,10 @@ checkpoints files to local, on-node storage. However local, on-node storage is n
 will be wiped after the job terminates. So if we are going to write checkpoint files to local 
 storage we need to periodically sync our checkpoint files with persistent storage (in a manner 
 which will not block our training progress).
+
+We follow the same procedure for our Tensorboard logs. Periodically syncing Tensorboard logs to 
+`/ibex/(f)scratch` allows us to run Tensorboard on a login node while the training job is 
+running in order to confirm that training is converging as expected.
  
 ```bash
 ...
@@ -70,6 +99,9 @@ rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
 
 #### Loading the software application stack
 
+Need to load appropriate Cuda Toolkit module; Conda environment contains everything 
+else (NCCL, CUDNN, OpenMPI, etc).
+
 ```bash
 ...
 # Load software stack
@@ -80,6 +112,7 @@ conda activate ../env
 
 #### GPU Resource Monitoring
 
+Run GPU resource monitoring in the background to avoid blocking the training progress. Write to persistent storage so that we can inspect logs whilst our job is running.
 ```bash
 ...
 # start the nvidia-smi process in the background
@@ -108,9 +141,10 @@ horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
 ### Submitting jobs
 
 ```bash
+$ USER_EMAIL= your.name@kaust.edu.sa # don't forget to change this!
 $ JOB_NAME=horovod-keras-single-node-benchmark
 $ mkdir ../results/$JOB_NAME
 $ TRAINING_SCRIPT=../src/horovod-keras-example/train.py
 $ DATA_DIR=/local/reference/CV/ILSVR/classification-localization/data/jpeg
-$ sbatch --job-name $JOB_NAME --mail-user USER_EMAIL --mail-type=ALL --export SRC_DIR=$SRC_DIR,DATA_DIR=$DATA_DIR horovod-single-node-job.sh
+$ sbatch --job-name $JOB_NAME --mail-user $USER_EMAIL --mail-type=ALL --export SRC_DIR=$SRC_DIR,DATA_DIR=$DATA_DIR horovod-single-node-job.sh
 ```
