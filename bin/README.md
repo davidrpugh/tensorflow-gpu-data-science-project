@@ -99,8 +99,10 @@ rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
 
 #### Loading the software application stack
 
-Need to load appropriate Cuda Toolkit module; Conda environment contains everything 
-else (NCCL, CUDNN, OpenMPI, etc).
+It is always good practice to explicitly load the software application stack inside the job script.
+First we load the appropriate Cuda Toolkit module for the version of TensorFlow we are using. Then we 
+activate the Conda environment containing all the other software dependencies in such as NCCL, CUDNN, 
+OpenMPI, and Horovod.
 
 ```bash
 ...
