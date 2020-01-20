@@ -135,13 +135,21 @@ kill $NVIDIA_SMI_PID
 
 #### Running the training job
 
+To launch the training job we use Horovod's builtin runner `horovodrun` (which is itself a thin wrapper 
+around `mpirun`). Note that we set the number of processes `-np` equal to the total number of tasks 
+`$SLURM_NTASKS` (which, you may recall, is also equal to the total number of GPUs being requested!). We 
+also control the actual training script being launched using the `$TRAINING_SCRIPT` environment variable 
+so that this same job script can be used for any (single-node) training job. Also note that we launch 
+the training process in the background so that we can more easily support non-blocking (i.e., asynchronous) 
+checkpointing.
+
 ```bash
 ...
 # start the training process in the background
 horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
     --data-dir $DATA_DIR \
     --read-checkpoints-from $PERSISTENT_CHECKPOINTS_DIR \
-    --write-checkpoints-to  $LOCAL_CHECKPOINTS_DIR \
+    --write-checkpoints-to $LOCAL_CHECKPOINTS_DIR \
     --tensorboard-logging-dir $LOCAL_TENSORBOARD_DIR &
 ...
 ```
