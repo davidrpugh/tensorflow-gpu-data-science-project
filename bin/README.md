@@ -156,11 +156,19 @@ horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
 
 ### Submitting jobs
 
+Before submitting the job we need to make sure that our results directory exists as Slurm will try to create 
+the `slurm-%j.out` and `slurm-%j.err` files in this directory before launching the our job and this process 
+will fail if the directory doesn't already exist. Note also that we export two environment variables 
+`$TRAINING_SCRIPT` and `DATA_DIR` from our shell environment on the login node to the shell environment on 
+the compute node. This was a design choice that should allow the `horovod-single-node-job.sh` job script to 
+be reused for arbitrary training jobs (at least those that following the workflow conventions discussed above).
+Finally, we submit the job to Ibex using the `sbatch` command.
+ 
 ```bash
 $ USER_EMAIL= your.name@kaust.edu.sa # don't forget to change this!
 $ JOB_NAME=horovod-keras-single-node-benchmark
 $ mkdir ../results/$JOB_NAME
 $ TRAINING_SCRIPT=../src/horovod-keras-example/train.py
 $ DATA_DIR=/local/reference/CV/ILSVR/classification-localization/data/jpeg
-$ sbatch --job-name $JOB_NAME --mail-user $USER_EMAIL --mail-type=ALL --export SRC_DIR=$SRC_DIR,DATA_DIR=$DATA_DIR horovod-single-node-job.sh
+$ sbatch --job-name $JOB_NAME --mail-user $USER_EMAIL --mail-type=ALL --export TRAINING_SCRIPT=$TRAINING_SCRIPT,DATA_DIR=$DATA_DIR horovod-single-node-job.sh
 ```
