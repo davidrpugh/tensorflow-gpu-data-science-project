@@ -114,7 +114,13 @@ conda activate ../env
 
 #### GPU Resource Monitoring
 
-Run GPU resource monitoring in the background to avoid blocking the training progress. Write to persistent storage so that we can inspect logs whilst our job is running.
+Understanding GPU resource utilization is critical for performance tuning deep learning applications. 
+At present accessing GPU resource utilization for an individual job is a bit challenging so we wanted 
+to share a solution that we have useful. The basic idea is to launch `nvidia-smi dmon` as a 
+background process prior to starting the training job (this way we don't block the training job from 
+making progress) and to have `nvidia-smi dmon` append its logs to a file on persistent storage (so 
+that the GPU resource utilization logs can be inspected whilst the training job is still running).
+
 ```bash
 ...
 # start the nvidia-smi process in the background
