@@ -169,8 +169,9 @@ intial_epoch = hvd.broadcast(initial_epoch, root_rank=0, name='initial_epoch')
 _loss_fn = (keras.losses
                  .CategoricalCrossentropy())
     
-# adjust initial learning rate based on number of GPUs.
-_initial_lr = args.base_lr * hvd.size() 
+# adjust initial learning rate based on number of "effective GPUs".
+_n_effective_gpus = (args.batch_size // 32) * hvd.size() 
+_initial_lr = args.base_lr * _n_effective_gpus 
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
 _distributed_optimizer = hvd.DistributedOptimizer(_optimizer)
