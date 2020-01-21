@@ -93,7 +93,8 @@ if not os.path.isdir(tensorboard_logging_dir) and hvd.rank() == 0:
     os.mkdir(tensorboard_logging_dir)
 
 # define constants used in data preprocessing
-img_width, img_height = 224, 224
+resized_img_width, resized_img_height = 256, 256
+target_img_width, target_img_height = 224, 224
 n_training_images = 1281167
 n_validation_images = 50000
 n_testing_images = 100000
@@ -109,25 +110,27 @@ def _get_label(file_path) -> tf.Tensor:
     return label
 
 @tf.function
-def _decode_img(img):
-    # convert the compressed string to a 3D uint8 tensor
-    img = (tf.image
-             .decode_jpeg(img, channels=3))
-    # convert to floats in the [0,1] range.
-    img = (tf.image
-             .convert_image_dtype(img, tf.float32))
-    # resize the image to the desired size.
-    img = (tf.image
-             .resize(img, [img_width, img_height]))
-    return img
-
-@tf.function
 def preprocess(image):
     label = _get_label(image)
-    # load the raw data from the file as a string
-    img = tf.io.read_file(image)
-    img = _decode_img(img)
-    return img, label
+    # read the file and decode the image
+    str_tensor = (tf.io
+                    .read_file(image))
+    int_tensor = (tf.image
+                    .decode_jpeg(str_tensor, channels=3))
+    # standardize the image    
+    resized_image = (tf.image
+                       .resize(int_tensor, size=[resized_img_height, resized_img_width]))
+    standardized_image = (tf.image
+                            .per_image_standardization(resized_image))
+    return standardized_image, label
+
+@tf.function
+def training_augmentations(preprocessed_image, label):
+    random_cropped_image = (tf.image
+                              .random_crop(preprocessed_image, size=[target_img_width, target_img_height, 3]))
+    flipped_image = (tf.image
+                       .random_flip_left_right(random_cropped_image))
+    return flipped_image, label
 
 # allow Tensorflow to choose the amount of parallelism used in preprocessing based on number of available CPUs
 AUTOTUNE = (tf.data
@@ -138,8 +141,9 @@ AUTOTUNE = (tf.data
 training_dataset = (tf.data
                       .Dataset
                       .list_files(f"{training_data_dir}/*/*", shuffle=True, seed=hvd.rank())
-                      .map(preprocess, num_parallel_calls=AUTOTUNE)
+                      .map(preprocess, num_parallel_calls=AUTOTUNE) # good place to cache in memory!
                       .shuffle(args.shuffle_buffer_size, reshuffle_each_iteration=True, seed=hvd.rank())
+                      .map(training_augmentations, num_parallel_calls=AUTOTUNE)
                       .repeat()
                       .batch(args.batch_size)
                       .prefetch(args.prefetch_buffer_size))
