@@ -8,7 +8,9 @@ dependencies:
   - cudnn=7.6
   - cupti=10.0
   - cxx-compiler=1.0 # required to build horovod
+  - ipython-sql=0.3
   - jupyterlab=1.2
+  - jupyterlab-git=0.9
   - nccl=2.4
   - nvcc_linux-64=10.0 # virtual package; expects cudatoolkit to be installed
   - nodejs=12.13
