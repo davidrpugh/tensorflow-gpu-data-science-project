@@ -121,15 +121,30 @@ background process prior to starting the training job (this way we don't block t
 making progress) and to have `nvidia-smi dmon` append its logs to a file on persistent storage (so 
 that the GPU resource utilization logs can be inspected whilst the training job is still running).
 
+We also use a new tool called `jupyterlab-nvdashboard` developed by the NVIDIA RAPIDS team to provide 
+a browser-based UI for GPU, CPU, memory, and IO resource monitoring. The server is started as a 
+background process prior to launching your training job and is accessible from a web browser at the 
+following URL
+```
+$IBEX_NODE_NAME.ibex.kaust.edu.sa:$NVDASHBOARD_PORT
+``` 
+where `$IBEX_NODE_NAME` is the name of the node on Ibex where your job is running.
+
 ```bash
 ...
 # start the nvidia-smi process in the background
 NVIDIA_SMI_DELAY_SECONDS=60
 nvidia-smi dmon --delay $NVIDIA_SMI_DELAY_SECONDS --options DT >> $PERSISTENT_LOGGING_DIR/nvidia-smi.log &
 NVIDIA_SMI_PID=$!
+
+# start the nvdashboard server in the background
+NVDASHBOARD_PORT=8889
+python -m jupyterlab_nvdashboard.server $NVDASHBOARD_PORT &
+NVDASHBOARD_PID=$!
+
 ...
-# kill off the nvidia-smi process
-kill $NVIDIA_SMI_PID
+# kill off the GPU monitoring processes
+kill $NVIDIA_SMI_PID $NVDASHBOARD_PID
 ...
 ```
 
