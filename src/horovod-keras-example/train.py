@@ -18,8 +18,7 @@ parser.add_argument("--shuffle-buffer-size",
                     help="Size of the shuffle buffer (default buffer size is 1% of all training images)")
 parser.add_argument("--prefetch-buffer-size",
                     type=int,
-                    default=1,
-                    help="Size of the prefetch buffer")
+                    help="Size of the prefetch buffer (if not provided, Tensorflow will tune the prefetch buffer size based on runtime conditions")
 parser.add_argument("--read-checkpoints-from",
                     type=str,
                     help="Path to a directory containing existing checkpoints")
@@ -30,11 +29,15 @@ parser.add_argument("--tensorboard-logging-dir",
                     type=str,
                     help="Path to the tensorboard logging directory")
 
-# Default settings from https://arxiv.org/abs/1706.02677.
+# Most default settings from https://arxiv.org/abs/1706.02677.
 parser.add_argument("--batch-size",
                     type=int,
-                    default=32,
+                    default=256,
                     help="input batch size for training")
+parser.add_argument("--base-batch-size",
+                    type=int,
+                    default=32,
+                    help="batch size used to determine number of effective GPUs")
 parser.add_argument("--val-batch-size",
                     type=int,
                     default=32,
@@ -137,6 +140,9 @@ AUTOTUNE = (tf.data
               .experimental
               .AUTOTUNE)
 
+# allow Tensorflow to tune the optimal prefetch buffer size based on runtime conditions
+_prefetch_buffer_size = AUTOTUNE if args.prefetch_buffer_size is None else args.prefetch_buffer_size
+
 # make sure that each GPU uses a different seed so that each GPU trains on different random sample of training data
 training_dataset = (tf.data
                       .Dataset
@@ -146,7 +152,7 @@ training_dataset = (tf.data
                       .map(training_augmentations, num_parallel_calls=AUTOTUNE)
                       .repeat()
                       .batch(args.batch_size)
-                      .prefetch(args.prefetch_buffer_size))
+                      .prefetch(_prefetch_buffer_size))
 
 validation_dataset = (tf.data
                         .Dataset
@@ -171,8 +177,10 @@ intial_epoch = hvd.broadcast(initial_epoch, root_rank=0, name='initial_epoch')
 _loss_fn = (keras.losses
                  .CategoricalCrossentropy())
     
-# adjust initial learning rate based on number of GPUs.
-_initial_lr = args.base_lr * hvd.size() 
+# adjust initial learning rate based on number of "effective GPUs".
+_global_batch_size = args.batch_size * hvd.size()
+_n_effective_gpus = _global_batch_size // args.base_batch_size 
+_initial_lr = args.base_lr * _n_effective_gpus 
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
 _distributed_optimizer = hvd.DistributedOptimizer(_optimizer)
