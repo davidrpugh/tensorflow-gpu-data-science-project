@@ -170,7 +170,8 @@ _loss_fn = (keras.losses
                  .CategoricalCrossentropy())
     
 # adjust initial learning rate based on number of "effective GPUs".
-_n_effective_gpus = (args.batch_size // 32) * hvd.size() 
+_global_batch_size = args.batch_size * hvd.size()
+_n_effective_gpus = _global_batch_size // 32 
 _initial_lr = args.base_lr * _n_effective_gpus 
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
