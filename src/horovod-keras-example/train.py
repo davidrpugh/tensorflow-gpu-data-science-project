@@ -134,7 +134,7 @@ def transform_image(preprocessed_image, label):
     _augmented_image = (tf.image
                           .random_flip_left_right(_augmented_image))
     _augmented_image = (tf.image
-			  .random_contrast(_augmented_image, lower=0.8, upper=1.2))
+                          .random_contrast(_augmented_image, lower=0.8, upper=1.2))
     return _augmented_image, label
 
 # allow Tensorflow to choose the amount of parallelism used in data pipelines
@@ -159,7 +159,7 @@ training_dataset = (tf.data
 validation_dataset = (tf.data
                         .Dataset
                         .list_files(f"{validation_data_dir}/*/*", shuffle=False)
-                        .map(preprocess, num_parallel_calls=AUTOTUNE)
+                        .map(preprocess_image, num_parallel_calls=AUTOTUNE)
                         .batch(args.val_batch_size))
     
 # Look for a pre-existing checkpoint from which to resume training
