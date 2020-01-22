@@ -113,7 +113,7 @@ def _get_label(file_path) -> tf.Tensor:
     return label
 
 @tf.function
-def preprocess(image):
+def preprocess_image(image):
     label = _get_label(image)
     # read the file and decode the image
     str_tensor = (tf.io
@@ -128,14 +128,16 @@ def preprocess(image):
     return standardized_image, label
 
 @tf.function
-def training_augmentations(preprocessed_image, label):
-    random_cropped_image = (tf.image
-                              .random_crop(preprocessed_image, size=[target_img_width, target_img_height, 3]))
-    flipped_image = (tf.image
-                       .random_flip_left_right(random_cropped_image))
-    return flipped_image, label
+def transform_image(preprocessed_image, label):
+    _augmented_image = (tf.image
+                          .random_crop(preprocessed_image, size=[target_img_width, target_img_height, 3]))
+    _augmented_image = (tf.image
+                          .random_flip_left_right(_augmented_image))
+    _augmented_image = (tf.image
+			  .random_contrast(_augmented_image, lower=0.8, upper=1.2))
+    return _augmented_image, label
 
-# allow Tensorflow to choose the amount of parallelism used in preprocessing based on number of available CPUs
+# allow Tensorflow to choose the amount of parallelism used in data pipelines
 AUTOTUNE = (tf.data
               .experimental
               .AUTOTUNE)
@@ -147,9 +149,9 @@ _prefetch_buffer_size = AUTOTUNE if args.prefetch_buffer_size is None else args.
 training_dataset = (tf.data
                       .Dataset
                       .list_files(f"{training_data_dir}/*/*", shuffle=True, seed=hvd.rank())
-                      .map(preprocess, num_parallel_calls=AUTOTUNE) # good place to cache in memory!
+                      .map(preprocess_image, num_parallel_calls=AUTOTUNE) # good place to cache in memory!
                       .shuffle(args.shuffle_buffer_size, reshuffle_each_iteration=True, seed=hvd.rank())
-                      .map(training_augmentations, num_parallel_calls=AUTOTUNE)
+                      .map(transform_image, num_parallel_calls=AUTOTUNE)
                       .repeat()
                       .batch(args.batch_size)
                       .prefetch(_prefetch_buffer_size))
