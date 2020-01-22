@@ -36,6 +36,12 @@ NVIDIA_SMI_DELAY_SECONDS=60
 nvidia-smi dmon --delay $NVIDIA_SMI_DELAY_SECONDS --options DT >> $PERSISTENT_LOGGING_DIR/nvidia-smi.log &
 NVIDIA_SMI_PID=$!
 
+# Start the nvdashboard server running in the background
+NVDASHBOARD_PORT=8889
+python -m jupyterlab_nvdashboard.server $NVDASHBOARD_PORT &
+NVDASHBOARD_PID=$!
+
+https://github.com/kaust-vislab/tensorflow-gpu-data-science-project
 # start the training process in the background
 horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
     --data-dir $DATA_DIR \
@@ -55,9 +61,9 @@ while [ "${HOROVODRUN_STATE}" != "" ]
         HOROVODRUN_STATE=$(ps -h --pid $HOROVODRUN_PID -o state | head -n 1)
 done
 
-# kill off the nvidia-smi process
+# kill off the GPU monitoring processes
 kill $NVIDIA_SMI_PID
-
+kill $NVDASHBOARD_PID
 # make sure to get any new files written since last rsync 
 rsync -a $LOCAL_CHECKPOINTS_DIR/ $PERSISTENT_CHECKPOINTS_DIR
 rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
