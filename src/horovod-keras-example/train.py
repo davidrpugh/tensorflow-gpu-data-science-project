@@ -18,8 +18,7 @@ parser.add_argument("--shuffle-buffer-size",
                     help="Size of the shuffle buffer (default buffer size is 1% of all training images)")
 parser.add_argument("--prefetch-buffer-size",
                     type=int,
-                    default=1,
-                    help="Size of the prefetch buffer")
+                    help="Size of the prefetch buffer (if not provided, Tensorflow will tune the prefetch buffer size based on runtime conditions")
 parser.add_argument("--read-checkpoints-from",
                     type=str,
                     help="Path to a directory containing existing checkpoints")
@@ -134,6 +133,9 @@ AUTOTUNE = (tf.data
               .experimental
               .AUTOTUNE)
 
+# allow Tensorflow to tune the optimal prefetch buffer size based on runtime conditions
+_prefetch_buffer_size = AUTOTUNE if args.prefetch_buffer_size is None else args.prefetch_buffer_size
+
 # make sure that each GPU uses a different seed so that each GPU trains on different random sample of training data
 training_dataset = (tf.data
                       .Dataset
@@ -142,7 +144,7 @@ training_dataset = (tf.data
                       .shuffle(args.shuffle_buffer_size, reshuffle_each_iteration=True, seed=hvd.rank())
                       .repeat()
                       .batch(args.batch_size)
-                      .prefetch(args.prefetch_buffer_size))
+                      .prefetch(_prefetch_buffer_size))
 
 validation_dataset = (tf.data
                         .Dataset
