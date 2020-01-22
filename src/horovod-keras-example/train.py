@@ -29,11 +29,15 @@ parser.add_argument("--tensorboard-logging-dir",
                     type=str,
                     help="Path to the tensorboard logging directory")
 
-# Default settings from https://arxiv.org/abs/1706.02677.
+# Most default settings from https://arxiv.org/abs/1706.02677.
 parser.add_argument("--batch-size",
                     type=int,
-                    default=32,
+                    default=256,
                     help="input batch size for training")
+parser.add_argument("--base-batch-size",
+                    type=int,
+                    default=32,
+                    help="batch size used to determine number of effective GPUs")
 parser.add_argument("--val-batch-size",
                     type=int,
                     default=32,
@@ -169,8 +173,10 @@ intial_epoch = hvd.broadcast(initial_epoch, root_rank=0, name='initial_epoch')
 _loss_fn = (keras.losses
                  .CategoricalCrossentropy())
     
-# adjust initial learning rate based on number of GPUs.
-_initial_lr = args.base_lr * hvd.size() 
+# adjust initial learning rate based on number of "effective GPUs".
+_global_batch_size = args.batch_size * hvd.size()
+_n_effective_gpus = _global_batch_size // args.base_batch_size 
+_initial_lr = args.base_lr * _n_effective_gpus 
 _optimizer = (keras.optimizers
                    .SGD(lr=_initial_lr, momentum=args.momentum))
 _distributed_optimizer = hvd.DistributedOptimizer(_optimizer)
