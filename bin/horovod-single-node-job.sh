@@ -43,11 +43,13 @@ NVDASHBOARD_PID=$!
 
 https://github.com/kaust-vislab/tensorflow-gpu-data-science-project
 # start the training process in the background
-horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
-    --data-dir $DATA_DIR \
-    --read-checkpoints-from $PERSISTENT_CHECKPOINTS_DIR \
-    --write-checkpoints-to  $LOCAL_CHECKPOINTS_DIR \
-    --tensorboard-logging-dir $LOCAL_TENSORBOARD_DIR &
+horovodrun -np $SLURM_NTASKS \
+           --timeline-filename $PERSISTENT_LOGGING_DIR/horovodrun-timeline-$SLURM_JOB_ID.json \
+           python $TRAINING_SCRIPT \
+           --data-dir $DATA_DIR \
+           --read-checkpoints-from $PERSISTENT_CHECKPOINTS_DIR \
+           --write-checkpoints-to  $LOCAL_CHECKPOINTS_DIR \
+           --tensorboard-logging-dir $LOCAL_TENSORBOARD_DIR &
 HOROVODRUN_PID=$!
 
 # asynchronous rsync of training logs between local and persistent storage
@@ -62,8 +64,8 @@ while [ "${HOROVODRUN_STATE}" != "" ]
 done
 
 # kill off the GPU monitoring processes
-kill $NVIDIA_SMI_PID
-kill $NVDASHBOARD_PID
+kill $NVIDIA_SMI_PID $NVDASHBOARD_PID
+
 # make sure to get any new files written since last rsync 
 rsync -a $LOCAL_CHECKPOINTS_DIR/ $PERSISTENT_CHECKPOINTS_DIR
 rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
