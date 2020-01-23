@@ -130,7 +130,7 @@ def preprocess_image(image):
 @tf.function
 def transform_image(preprocessed_image, label):
     _augmented_image = (tf.image
-                          .random_crop(preprocessed_image, size=[target_img_width, target_img_height, 3]))
+                          .random_crop(preprocessed_image, size=[target_img_height, target_img_width, 3]))
     _augmented_image = (tf.image
                           .random_flip_left_right(_augmented_image))
     _augmented_image = (tf.image
