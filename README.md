@@ -21,11 +21,43 @@ Project organization is based on ideas from [_Good Enough Practices for Scientif
 9. Put project source code in the `src` directory.
 10. Name all files to reflect their content or function.
 
+## Installing NVIDIA CUDA Toolkit
+
+### Workstation
+
+You will need to have the [appropriate version](https://developer.nvidia.com/cuda-toolkit-archive) 
+of the NVIDIA CUDA Toolkit installed on your workstation. For TensorFlow 1.X or TensorFlow 2.0 the 
+required version is 
+[NVIDIA CUDA Toolkit 10.0](https://developer.nvidia.com/cuda-10.0-download-archive) 
+[(documentation)](https://docs.nvidia.com/cuda/archive/10.0/); for TensorFlow 2.1 you can install 
+[NVIDIA CUDA Toolkit 10.1](https://developer.nvidia.com/cuda-10.1-download-archive-update2) 
+[(documentation)](https://docs.nvidia.com/cuda/archive/10.1/).
+
+After installing the appropriate version of the NVIDIA CUDA Toolkit you will need to set the 
+following environment variables.
+
+```bash
+$ export CUDA_HOME=/usr/local/cuda-10.0 # /usr/local/cuda-10.1 if using TensorFlow 2.1
+$ export PATH=$CUDA_HOME/bin:$PATH
+$ export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+```
+
+### Ibex
+
+Ibex users do not neet to install NVIDIA CUDA Toolkit as the relevant versions have already been 
+made available on Ibex by the Ibex Systems team. Users simply need to load the appropriate version 
+using the `module` tool. 
+
+```bash
+$ module load cuda/10.0.130 # cuda/10.1.243 if using TensorFlow 2.1
+```
+
 ## Building the Conda environment
 
-After adding any necessary dependencies that should be downloaded via `conda` to the `environment.yml` file 
-and any dependencies that should be downloaded via `pip` to the `requirements.txt` file you create the 
-Conda environment in a sub-directory `./env`of your project directory by running the following commands.
+After adding any necessary dependencies that should be downloaded via `conda` to the 
+`environment.yml` file and any dependencies that should be downloaded via `pip` to the 
+`requirements.txt` file you create the Conda environment in a sub-directory `./env`of your project 
+directory by running the following commands.
 
 ```bash
 $ export ENV_PREFIX=$PWD/env
@@ -105,7 +137,7 @@ after the environment has already been created, then you can re-create the envir
 following command.
 
 ```bash
-$ conda env create --prefix #ENV_PREFIX --file environment.yml --force
+$ conda env create --prefix $ENV_PREFIX --file environment.yml --force
 ```
 
 ## Using Docker
