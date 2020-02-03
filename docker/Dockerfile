@@ -61,6 +61,7 @@ ENV ENV_PREFIX $PROJECT_DIR/env
 ENV HOROVOD_CUDA_HOME $CUDA_HOME
 ENV HOROVOD_NCCL_HOME $ENV_PREFIX
 ENV HOROVOD_GPU_ALLREDUCE NCCL
+ENV HOROVOD_GPU_BROADCAST NCCL
 RUN conda update --name base --channel defaults conda && \
     conda env create --prefix $ENV_PREFIX --file /tmp/environment.yml --force && \
     conda activate $ENV_PREFIX && \
