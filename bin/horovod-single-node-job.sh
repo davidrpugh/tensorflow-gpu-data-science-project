@@ -41,7 +41,6 @@ NVDASHBOARD_PORT=8889
 python -m jupyterlab_nvdashboard.server $NVDASHBOARD_PORT &
 NVDASHBOARD_PID=$!
 
-https://github.com/kaust-vislab/tensorflow-gpu-data-science-project
 # start the training process in the background
 horovodrun -np $SLURM_NTASKS python $TRAINING_SCRIPT \
     --data-dir $DATA_DIR \
