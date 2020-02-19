@@ -61,8 +61,8 @@ while [ "${HOROVODRUN_STATE}" != "" ]
 done
 
 # kill off the GPU monitoring processes
-kill $NVIDIA_SMI_PID
-kill $NVDASHBOARD_PID
+kill $NVIDIA_SMI_PID $NVDASHBOARD_PID
+
 # make sure to get any new files written since last rsync 
 rsync -a $LOCAL_CHECKPOINTS_DIR/ $PERSISTENT_CHECKPOINTS_DIR
 rsync -a $LOCAL_TENSORBOARD_DIR/ $PERSISTENT_TENSORBOARD_DIR
