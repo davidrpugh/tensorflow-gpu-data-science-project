@@ -13,7 +13,7 @@ dependencies:
   - jupyterlab-git=0.9
   - nccl=2.4
   - nvcc_linux-64=10.0 # virtual package; expects cudatoolkit to be installed
-  - nodejs=12.13
+  - nodejs=13.0
   - openmpi=4.0
   - pip=19.3
   - pip:
