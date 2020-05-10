@@ -1,7 +1,4 @@
-horovod==0.19.*
-jupyterlab-nvdashboard==0.1.*
+jupyterlab-nvdashboard==0.2.*
 jupyterlab_sql==0.3.*
 jupyter-tensorboard==0.2.*
-
-# make sure horovod is re-compiled if environment is re-built
---no-binary=horovod
+tensorflow==2.2.*

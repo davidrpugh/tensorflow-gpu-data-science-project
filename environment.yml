@@ -5,18 +5,21 @@ channels:
   - defaults
 
 dependencies:
+  - bokeh=2.0
+  - cudatoolkit=10.1
   - cudnn=7.6
-  - cupti=10.0
-  - cxx-compiler=1.0 # required to build horovod
+  - cupti=10.1
+  - hvplot=0.5
   - ipython-sql=0.3
   - jupyterlab=1.2
   - jupyterlab-git=0.9
-  - nccl=2.4
-  - nvcc_linux-64=10.0 # virtual package; expects cudatoolkit to be installed
-  - nodejs=13.0
-  - openmpi=4.0
-  - pip=19.3
+  - matplotlib=3.2
+  - mpi4py=3.0 # installs cuda-aware openmpi
+  - nbdime=1.1
+  - nccl=2.5
+  - nodejs=13
+  - pandas=1.0
+  - pip=20.0
   - pip:
-    - tensorflow-gpu==2.0.* # needs to be installed prior to building horovod
     - -r file:requirements.txt
-  - python=3.6
+  - python=3.7
