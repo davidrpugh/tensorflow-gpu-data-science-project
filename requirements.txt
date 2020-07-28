@@ -1,4 +1,2 @@
 jupyterlab-nvdashboard==0.2.*
-jupyterlab_sql==0.3.*
 jupyter-tensorboard==0.2.*
-tensorflow==2.2.*
