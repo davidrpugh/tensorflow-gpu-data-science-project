@@ -33,7 +33,7 @@ an ssh tunnel from your local machine to glogin node on Ibex using the following
 ssh -L ${JUPYTERLAB_PORT}:${IBEX_NODE}:${JUPYTERLAB_PORT} ${KAUST_USER}@glogin.ibex.kaust.edu.sa
 ```
 
-The exact command for you job can be copied from the 
+The exact command for your job can be copied from the 
 `launch-jupyter-server-$SLURM_JOB_ID-slurm.err` file.
 
 #### Accessing Jupyter server from your local machine
