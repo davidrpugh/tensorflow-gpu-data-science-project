@@ -5,15 +5,49 @@ channels:
   - defaults
 
 dependencies:
-  - cudatoolkit=10.1
-  - cudnn=7.6
-  - cupti=10.1
-  - jupyterlab=2.2
-  - jupyterlab-git=0.20
-  - nccl=2.4
-  - nodejs=14
-  - pip=20.1
+  - bokeh
+  - cudnn
+  - cudatoolkit=11.2
+  - cupy
+  - dask
+  - dask-ml
+  - dask-labextension
+  - datashader
+  - featuretools
+  - gh
+  - git
+  - grpcio=1.34
+  - h5py=3.1
+  - holoviews
+  - hvplot
+  - imbalanced-learn
+  - jupyterlab
+  - jupyterlab-git
+  - jupyterlab-lsp
+  - jupyterlab-nvdashboard
+  - lightgbm
+  - matplotlib
+  - nccl
+  - numba
+  - numpy=1.19
+  - optuna
+  - pandas
+  - panel
+  - pip
   - pip:
-    - tensorflow-gpu==2.3.* # switch to conda when available
     - -r file:requirements.txt
-  - python=3.7
+  - pyarrow
+  - python=3.8
+  - python-language-server
+  - pyviz_comms
+  - scikit-learn
+  - scipy
+  - shap
+  - six=1.15
+  - tensorboard
+  - typing-extensions=3.7
+  - umap-learn
+  - wandb
+  - xarray
+  - xeus-python
+  - xgboost
