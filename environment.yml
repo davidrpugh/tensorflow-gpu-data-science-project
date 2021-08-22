@@ -16,7 +16,7 @@ dependencies:
   - featuretools
   - gh
   - git
-  - grpcio=1.34
+  - google-auth=1.35
   - h5py=3.1
   - holoviews
   - hvplot
@@ -35,7 +35,7 @@ dependencies:
   - panel
   - pip
   - pip:
-    - -r file:requirements.txt
+    - -r requirements.txt
   - pyarrow
   - python=3.8
   - python-language-server
