@@ -1,2 +1,2 @@
 pandas-bokeh
-tensorflow==2.6
+tensorflow==2.6.1
