@@ -16,8 +16,7 @@ dependencies:
   - featuretools
   - gh
   - git
-  - google-auth=1.35
-  - h5py=3.1
+  - h5py
   - holoviews
   - hvplot
   - imbalanced-learn
@@ -29,7 +28,7 @@ dependencies:
   - matplotlib
   - nccl
   - numba
-  - numpy=1.19
+  - numpy
   - optuna
   - pandas
   - panel
@@ -37,15 +36,14 @@ dependencies:
   - pip:
     - -r requirements.txt
   - pyarrow
-  - python=3.8
+  - python
   - python-language-server
   - pyviz_comms
   - scikit-learn
   - scipy
   - shap
-  - six=1.15
   - tensorboard
-  - typing-extensions=3.7
+  - tensorflow=2.6.2
   - umap-learn
   - wandb
   - xarray
